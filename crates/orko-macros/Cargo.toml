@@ -1,0 +1,12 @@
+[package]
+name = "orko-macros"
+version.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
