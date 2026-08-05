@@ -40,7 +40,7 @@ mod provider;
 mod router;
 mod tool;
 
-pub use agent::{create_agent, Agent, AgentBuilder};
+pub use agent::{create_agent, Agent, AgentBuilder, MAX_TOOL_TURNS};
 pub use error::{Error, Result};
 pub use message::{Message, Prompt, Role};
 pub use provider::{

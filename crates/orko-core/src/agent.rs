@@ -1,48 +1,39 @@
-//! The [`Agent`] type, its [`AgentBuilder`], and the [`create_agent`] entry point.
+//! The [`Agent`] and [`AgentBuilder`] types, and the [`create_agent`] entry point.
 
 use crate::{
-    CompletionOptions, CompletionRequest, CompletionStream, Message, Prompt, Provider, Result, Tool,
+    CompletionOptions, CompletionRequest, CompletionStream, Error, Message, Prompt, Provider,
+    Result, Tool,
 };
 use futures::StreamExt;
 use std::sync::Arc;
 
-/// Start building an agent around `provider`.
+/// Creates an agent around `provider`.
 ///
 /// Generic over `T: Provider` and deliberately ignorant of any concrete
-/// provider — you hand it something that implements [`Provider`] and it never
-/// asks what it is.
+/// provider; accepts any type that implements [`Provider`]
 pub fn create_agent<P: Provider>(provider: P) -> AgentBuilder<P> {
     AgentBuilder::new(provider)
 }
 
-/// Fluent builder produced by [`create_agent`].
+/// Fluent and cloneable builder produced by [`create_agent`].
+#[derive(Clone)]
 pub struct AgentBuilder<P: Provider> {
     provider: P,
-    tools: Vec<Arc<dyn Tool>>,
-    system_prompt: Option<String>,
     model: Option<String>,
+    system_prompt: Option<String>,
+    tools: Vec<Arc<dyn Tool>>,
+    max_tool_turns: usize,
 }
 
 impl<P: Provider> AgentBuilder<P> {
     fn new(provider: P) -> Self {
         Self {
             provider,
-            tools: Vec::new(),
-            system_prompt: None,
             model: None,
+            system_prompt: None,
+            tools: Vec::new(),
+            max_tool_turns: MAX_TOOL_TURNS,
         }
-    }
-
-    /// Attach a set of tools the agent may call.
-    pub fn with_tools(mut self, tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Self {
-        self.tools.extend(tools);
-        self
-    }
-
-    /// Attach a single tool.
-    pub fn with_tool(mut self, tool: Arc<dyn Tool>) -> Self {
-        self.tools.push(tool);
-        self
     }
 
     /// Set the system prompt prepended to every conversation.
@@ -57,66 +48,184 @@ impl<P: Provider> AgentBuilder<P> {
         self
     }
 
+    /// Attach a set of tools the agent may call.
+    pub fn with_tools(mut self, tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Self {
+        self.tools.extend(tools);
+        self
+    }
+
+    /// Attach a single tool.
+    pub fn with_tool(mut self, tool: Arc<dyn Tool>) -> Self {
+        self.tools.push(tool);
+        self
+    }
+
+    /// Cap the provider round-trips per [`Agent::invoke`] call.
+    /// Defaults to [`MAX_TOOL_TURNS`]. A cap of `0` makes `invoke` always fail.
+    pub fn with_max_tool_turns(mut self, turns: usize) -> Self {
+        self.max_tool_turns = turns;
+        self
+    }
+
     /// Finalize into an [`Agent`].
-    pub fn build(self) -> Agent<P> {
+    ///
+    /// Sorts the tools by name; [`Agent::invoke`] binary-searches them when
+    /// dispatching tool calls.
+    pub fn build(mut self) -> Agent<P> {
+        self.tools.sort_by(|a, b| a.name().cmp(b.name()));
         Agent {
             provider: self.provider,
-            tools: self.tools,
-            system_prompt: self.system_prompt,
             model: self.model,
+            system_prompt: self.system_prompt,
+            tools: self.tools,
+            max_tool_turns: self.max_tool_turns,
         }
     }
 }
 
-/// A configured agent: a provider plus its tools and system prompt.
+/// A configured agent: a provider plus its system prompt and tools.
 ///
-/// The tool-calling loop (dispatch a call, feed the result back, re-invoke) is
-/// intentionally *not* implemented yet — [`Agent::invoke`] currently returns the
-/// provider's first completion. The types are wired so adding that loop is a
-/// local change here, not an API break.
+/// [`Agent::invoke`] runs the tool-calling loop: stream a completion, and if
+/// the model requested tool calls, execute them, feed the results back, and
+/// re-invoke — until the model answers in plain text.
+/// [`Agent::invoke_stream`] is single-turn: it returns the raw first stream
+/// and dispatches nothing.
 pub struct Agent<P: Provider> {
     provider: P,
-    tools: Vec<Arc<dyn Tool>>,
-    system_prompt: Option<String>,
     model: Option<String>,
+    system_prompt: Option<String>,
+    tools: Vec<Arc<dyn Tool>>,
+    max_tool_turns: usize,
 }
 
 impl<P: Provider> Agent<P> {
-    /// The tools registered on this agent.
+    /// The tools registered on this agent, sorted by name.
     pub fn tools(&self) -> &[Arc<dyn Tool>] {
         &self.tools
     }
 
-    fn build_request(&self, prompt: Prompt) -> CompletionRequest {
+    /// The system prompt (if any) followed by the prompt's messages.
+    fn seed_messages(&self, prompt: Prompt) -> Vec<Message> {
         let mut messages = Vec::with_capacity(prompt.messages.len() + 1);
         if let Some(sp) = &self.system_prompt {
             messages.push(Message::system(sp.clone()));
         }
         messages.extend(prompt.messages);
-        let options = CompletionOptions {
+        messages
+    }
+
+    fn options(&self) -> CompletionOptions {
+        CompletionOptions {
             model: self.model.clone(),
             tools: self.tools.iter().map(|t| t.spec()).collect(),
             ..Default::default()
-        };
-        CompletionRequest { messages, options }
+        }
     }
 
-    /// Run the agent to completion and return the full assistant reply.
+    /// Runs the agent to completion and return the final assistant reply.
     ///
-    /// Drains [`invoke_stream`](Self::invoke_stream) and concatenates the
-    /// chunks.
+    /// Streams a completion; when the model requests tool calls, each one is
+    /// dispatched to the matching registered tool, the results are fed back
+    /// into the conversation, and the provider is re-invoked. Returns the
+    /// content of the first completion that requests no tool calls.
+    ///
+    /// # Errors:
+    ///
+    /// Besides provider errors: a call to a tool that isn't registered is
+    /// [`Error::ToolExecution`], unparseable call arguments are
+    /// [`Error::Serialization`], and a conversation still requesting tools
+    /// after the configured cap ([`MAX_TOOL_TURNS`] unless overridden with
+    /// [`AgentBuilder::with_max_tool_turns`]) is [`Error::Other`].
     pub async fn invoke(&self, input: impl Into<Prompt>) -> Result<String> {
-        let mut stream = self.invoke_stream(input).await?;
-        let mut out = String::new();
-        while let Some(chunk) = stream.next().await {
-            out.push_str(&chunk?.content);
+        let mut messages = self.seed_messages(input.into());
+        for _ in 0..self.max_tool_turns {
+            let request = CompletionRequest {
+                messages: messages.clone(),
+                options: self.options(),
+            };
+            let mut stream = self.provider.complete(request).await?;
+
+            let mut content = String::new();
+            let mut calls: Vec<PendingCall> = Vec::new();
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk?;
+                content.push_str(&chunk.content);
+                for delta in chunk.tool_calls {
+                    let i = delta.index as usize;
+                    if calls.len() <= i {
+                        calls.resize_with(i + 1, PendingCall::default);
+                    }
+                    if delta.name.is_some() {
+                        calls[i].name = delta.name;
+                    }
+                    calls[i].arguments.push_str(&delta.arguments);
+                }
+            }
+
+            if calls.is_empty() {
+                return Ok(content);
+            }
+
+            messages.push(Message::assistant(render_assistant_turn(&content, &calls)));
+            for call in calls {
+                let name = call.name.as_deref().unwrap_or_default();
+                let tool = self
+                    .tools
+                    .binary_search_by(|t| t.name().cmp(name))
+                    .map(|i| &self.tools[i])
+                    .map_err(|_| {
+                        Error::ToolExecution(format!("model called unknown tool `{name}`"))
+                    })?;
+                let args = if call.arguments.trim().is_empty() {
+                    serde_json::Value::Object(Default::default())
+                } else {
+                    serde_json::from_str(&call.arguments)?
+                };
+                let output = tool.call(args).await?;
+                messages.push(Message::tool(format!("[{name}] {output}")));
+            }
         }
-        Ok(out)
+        Err(Error::Other(format!(
+            "tool-call loop still requesting tools after {} turns",
+            self.max_tool_turns
+        )))
     }
 
     /// Run the agent and return the raw completion stream.
+    ///
+    /// Single-turn: tool calls in the stream are not dispatched, for full loop
+    /// use [`invoke`](Self::invoke).
     pub async fn invoke_stream(&self, input: impl Into<Prompt>) -> Result<CompletionStream> {
-        let request = self.build_request(input.into());
-        self.provider.complete(request).await
+        let request = CompletionRequest {
+            messages: self.seed_messages(input.into()),
+            options: self.options(),
+        };
+        Ok(self.provider.complete(request).await?)
     }
+}
+
+/// Default upper bound on provider round-trips per [`Agent::invoke`] call.
+/// Override per agent with [`AgentBuilder::with_max_tool_turns`].
+pub const MAX_TOOL_TURNS: usize = 8;
+
+/// One tool call reassembled from streamed [`ToolCallDelta`](crate::ToolCallDelta) fragments.
+#[derive(Default)]
+struct PendingCall {
+    name: Option<String>,
+    arguments: String,
+}
+
+fn render_assistant_turn(content: &str, calls: &[PendingCall]) -> String {
+    let mut out = String::from(content);
+    for call in calls {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str("[tool_call] ");
+        out.push_str(call.name.as_deref().unwrap_or("?"));
+        out.push('(');
+        out.push_str(&call.arguments);
+        out.push(')');
+    }
+    out
 }

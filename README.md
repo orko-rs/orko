@@ -1,4 +1,4 @@
-# orko
+# Orko
 
 > **Agent orchestration toolkit for Rust** — efficient, durable, streaming-first agent orchestration
 

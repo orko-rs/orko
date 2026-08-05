@@ -1,4 +1,10 @@
 //! The [`Tool`] trait: a capability the model can invoke by name.
+//!
+//! TODO: `ToolRegistry` — newtype over the sorted `Vec<Arc<dyn Tool>>` that owns
+//! the invariants (sorted by name, duplicates rejected as `Error::Config`) and
+//! the lookup (`get(name)` via binary search). Would absorb the inline sort in
+//! `AgentBuilder::build` and the search in `Agent::invoke`; currently duplicates
+//! silently shadow. Add when a second lookup call site or a dedup bug shows up.
 
 use crate::Result;
 use serde::{Deserialize, Serialize};

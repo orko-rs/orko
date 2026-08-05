@@ -1,4 +1,4 @@
-//! The [`Provider`] trait — central abstraction for providers.
+//! The [`Provider`] trait is central abstraction for providers.
 //!
 //! A `Provider` turns messages into a stream of completion chunks in a runtime agnostic way.
 //! That is the *entire* contract. Any transport (HTTP, in-process, etc.) is handled by the caller.
@@ -8,6 +8,7 @@ use crate::{Message, Result};
 use futures::Stream;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 /// Per-request knobs. All optional; a provider falls back to its defaults if not set.
 #[derive(Debug, Clone, Default)]
@@ -130,6 +131,17 @@ pub trait Provider: Send + Sync {
     ) -> impl Future<Output = Result<CompletionStream>> + Send;
 }
 
+/// `Arc<P>` is itself a [`Provider`], delegating to the inner value. This makes
+/// any provider cheaply cloneable.
+impl<P: Provider> Provider for Arc<P> {
+    fn complete(
+        &self,
+        request: CompletionRequest,
+    ) -> impl Future<Output = Result<CompletionStream>> + Send {
+        (**self).complete(request)
+    }
+}
+
 /// Object-safe sibling of [`Provider`]. It exists so `Box<dyn DynProvider>` can
 /// be a [`Provider`]. The blanket impl erases any concrete `Provider` into it by
 /// boxing the returned future.
@@ -159,7 +171,6 @@ impl Provider for BoxProvider {
         &self,
         request: CompletionRequest,
     ) -> impl Future<Output = Result<CompletionStream>> + Send {
-        // **self = dyn DynProvider
         (**self).complete_dyn(request)
     }
 }
