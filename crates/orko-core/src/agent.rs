@@ -130,13 +130,17 @@ impl<P: Provider> Agent<P> {
     /// content of the first completion that requests no tool calls. A turn
     /// that streams only a refusal yields the refusal text instead of `""`.
     ///
+    /// Tool-level failures — an unknown tool name, unparseable arguments, or a
+    /// tool returning an error — are not errors here: they are fed back to
+    /// the model as the tool result so it can correct itself on the next turn,
+    /// bounded by the turn cap.
+    ///
     /// # Errors
     ///
-    /// Besides provider errors: a call to a tool that isn't registered is
-    /// [`Error::ToolExecution`], unparseable call arguments are
-    /// [`Error::Serialization`], and a conversation still requesting tools
-    /// after the configured cap ([`MAX_TOOL_TURNS`] unless overridden with
-    /// [`AgentBuilder::with_max_tool_turns`]) is [`Error::Other`].
+    /// Provider and stream failures surface as-is; a conversation still
+    /// requesting tools after the configured cap ([`MAX_TOOL_TURNS`] unless
+    /// overridden with [`AgentBuilder::with_max_tool_turns`]) is
+    /// [`Error::ToolCallDepth`].
     pub async fn invoke(&self, input: impl Into<Prompt>) -> Result<String> {
         let mut messages = self.seed_messages(input.into());
         for _ in 0..self.max_tool_turns {
@@ -174,18 +178,12 @@ impl<P: Provider> Agent<P> {
                 return Ok(if content.is_empty() { refusal } else { content });
             }
 
-            messages.push(Message::assistant(render_assistant_turn(&content, &calls)));
+            messages.push(Message::assistant(Self::render_assistant_turn(
+                &content, &calls,
+            )));
             for call in calls {
                 let name = call.name.as_deref().unwrap_or_default();
-                let tool = self.tools.get(name).ok_or_else(|| {
-                    Error::ToolExecution(format!("model called an unknown tool `{name}`"))
-                })?;
-                let args = if call.arguments.trim().is_empty() {
-                    serde_json::Value::Object(Default::default())
-                } else {
-                    serde_json::from_str(&call.arguments)?
-                };
-                let output = tool.call(args).await?;
+                let output = self.run_tool(name, &call.arguments).await;
                 messages.push(Message::tool(match call.id.as_deref() {
                     Some(id) => format!("[{name}:{id}] {output}"),
                     None => format!("[{name}] {output}"),
@@ -196,6 +194,45 @@ impl<P: Provider> Agent<P> {
             "tool-call loop still requesting tools after the allowed limit of {} turns",
             self.max_tool_turns
         )))
+    }
+
+    /// Renders a tool-calling assistant turn as flat text (`[tool_call:id]`
+    /// prefixes).
+    fn render_assistant_turn(content: &str, calls: &[PendingCall]) -> String {
+        let mut out = String::from(content);
+        for call in calls {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            let name = call.name.as_deref().unwrap_or("?");
+            match &call.id {
+                Some(id) => out.push_str(&format!("[tool_call:{id}] {name}({})", call.arguments)),
+                None => out.push_str(&format!("[tool_call] {name}({})", call.arguments)),
+            }
+        }
+        out
+    }
+
+    /// Executes one reassembled tool call, with failures rendered as text:
+    /// the model receives them as the tool result and can correct itself on
+    /// the next turn. Only [`invoke`]'s turn cap bounds the retries.
+    async fn run_tool(&self, name: &str, arguments: &str) -> String {
+        let Some(tool) = self.tools.get(name) else {
+            return format!("error: unknown tool `{name}`");
+        };
+        let arguments = if arguments.trim().is_empty() {
+            "{}"
+        } else {
+            arguments
+        };
+        let args = match serde_json::from_str(arguments) {
+            Ok(args) => args,
+            Err(e) => return format!("error: invalid arguments: {e}"),
+        };
+        match tool.call(args).await {
+            Ok(output) => output,
+            Err(e) => format!("error: {e}"),
+        }
     }
 
     /// Runs the agent and return the raw completion stream.
@@ -221,19 +258,4 @@ struct PendingCall {
     id: Option<String>,
     name: Option<String>,
     arguments: String,
-}
-
-fn render_assistant_turn(content: &str, calls: &[PendingCall]) -> String {
-    let mut out = String::from(content);
-    for call in calls {
-        if !out.is_empty() {
-            out.push('\n');
-        }
-        let name = call.name.as_deref().unwrap_or("?");
-        match &call.id {
-            Some(id) => out.push_str(&format!("[tool_call:{id}] {name}({})", call.arguments)),
-            None => out.push_str(&format!("[tool_call] {name}({})", call.arguments)),
-        }
-    }
-    out
 }

@@ -237,7 +237,102 @@ fn invoke_errors_when_turn_cap_exhausted() {
         .build()
         .unwrap();
     let err = futures::executor::block_on(agent.invoke("hi")).unwrap_err();
-    assert!(matches!(err, Error::Other(_)), "got: {err}");
+    assert!(matches!(err, Error::ToolCallDepth(_)), "got: {err}");
+}
+
+#[test]
+fn tool_failures_feed_back_for_self_correction() {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct Boom;
+    impl Tool for Boom {
+        fn name(&self) -> &str {
+            "boom"
+        }
+        fn description(&self) -> &str {
+            ""
+        }
+        fn parameters_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type": "object"})
+        }
+        fn call<'a>(
+            &'a self,
+            _args: serde_json::Value,
+        ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
+            Box::pin(async { Err(Error::ToolExecution("kaboom".into())) })
+        }
+    }
+
+    // Turn 0: three bad calls — unknown tool, malformed args, failing tool.
+    // Turn 1: all three failures must be visible as tool results.
+    struct Scripted {
+        turn: AtomicUsize,
+    }
+    impl Provider for Scripted {
+        async fn complete(&self, request: CompletionRequest) -> Result<CompletionStream> {
+            let chunks = match self.turn.fetch_add(1, Ordering::SeqCst) {
+                0 => vec![Ok(CompletionChunk {
+                    tool_calls: vec![
+                        ToolCallDelta {
+                            index: 0,
+                            name: Some("nope".into()),
+                            arguments: "{}".into(),
+                            ..Default::default()
+                        },
+                        ToolCallDelta {
+                            index: 1,
+                            name: Some("boom".into()),
+                            arguments: "{".into(),
+                            ..Default::default()
+                        },
+                        ToolCallDelta {
+                            index: 2,
+                            name: Some("boom".into()),
+                            arguments: "{}".into(),
+                            ..Default::default()
+                        },
+                    ],
+                    finish_reason: Some(FinishReason::ToolCalls),
+                    ..Default::default()
+                })],
+                _ => {
+                    let tool_results: Vec<_> = request
+                        .messages
+                        .iter()
+                        .filter(|m| m.role == Role::Tool)
+                        .map(|m| m.content.as_str())
+                        .collect();
+                    assert!(tool_results
+                        .iter()
+                        .any(|c| c.contains("unknown tool `nope`")));
+                    assert!(tool_results.iter().any(|c| c.contains("invalid arguments")));
+                    assert!(tool_results
+                        .iter()
+                        .any(|c| c.contains("tool execution error: kaboom")));
+                    vec![Ok(CompletionChunk {
+                        content: "recovered".into(),
+                        ..Default::default()
+                    })]
+                }
+            };
+            let stream: CompletionStream = Box::pin(futures::stream::iter(chunks));
+            Ok(stream)
+        }
+    }
+
+    let agent = create_agent(Scripted {
+        turn: AtomicUsize::new(0),
+    })
+    .with_tool(Arc::new(Boom))
+    .build()
+    .unwrap();
+    assert_eq!(
+        futures::executor::block_on(agent.invoke("hi")).unwrap(),
+        "recovered"
+    );
 }
 
 #[test]
