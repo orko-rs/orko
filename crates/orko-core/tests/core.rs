@@ -130,10 +130,14 @@ fn invoke_runs_the_tool_call_loop() {
                     }),
                 ],
                 _ => {
+                    assert!(request.messages.iter().any(|m| {
+                        m.role == Role::Assistant
+                            && m.content == r#"[tool_call:c1] double({"x":3})"#
+                    }));
                     assert!(request
                         .messages
                         .iter()
-                        .any(|m| m.role == Role::Tool && m.content.contains('6')));
+                        .any(|m| m.role == Role::Tool && m.content == "[double:c1] 6"));
                     vec![Ok(CompletionChunk {
                         content: "six".into(),
                         ..Default::default()
@@ -160,6 +164,27 @@ fn invoke_runs_the_tool_call_loop() {
     assert_eq!(
         futures::executor::block_on(agent.invoke("hi")).unwrap(),
         "six"
+    );
+}
+
+#[test]
+fn refusal_only_turn_is_not_an_empty_success() {
+    struct Refuser;
+    impl Provider for Refuser {
+        async fn complete(&self, _request: CompletionRequest) -> Result<CompletionStream> {
+            let chunks = vec![Ok(CompletionChunk {
+                refusal: Some("no can do".into()),
+                ..Default::default()
+            })];
+            let stream: CompletionStream = Box::pin(futures::stream::iter(chunks));
+            Ok(stream)
+        }
+    }
+
+    let agent = create_agent(Refuser).build();
+    assert_eq!(
+        futures::executor::block_on(agent.invoke("hi")).unwrap(),
+        "no can do"
     );
 }
 

@@ -10,7 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-/// Per-request knobs. All optional; a provider falls back to its defaults if not set.
+/// Per-request parameters. All optional; a provider falls back to its defaults if not set.
 #[derive(Debug, Clone, Default)]
 pub struct CompletionOptions {
     /// Model identifier, e.g. `"gpt-4o-mini"`. `None` means "provider default".

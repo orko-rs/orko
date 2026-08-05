@@ -42,25 +42,25 @@ impl<P: Provider> AgentBuilder<P> {
         self
     }
 
-    /// Override the model id sent with each request.
+    /// Overrides the model id sent with each request.
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
         self
     }
 
-    /// Attach a set of tools the agent may call.
+    /// Attaches a set of tools the agent may call.
     pub fn with_tools(mut self, tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Self {
         self.tools.extend(tools);
         self
     }
 
-    /// Attach a single tool.
+    /// Attaches a single tool.
     pub fn with_tool(mut self, tool: Arc<dyn Tool>) -> Self {
         self.tools.push(tool);
         self
     }
 
-    /// Cap the provider round-trips per [`Agent::invoke`] call.
+    /// Caps the provider round-trips per [`Agent::invoke`] call.
     /// Defaults to [`MAX_TOOL_TURNS`]. A cap of `0` makes `invoke` always fail.
     pub fn with_max_tool_turns(mut self, turns: usize) -> Self {
         self.max_tool_turns = turns;
@@ -127,7 +127,8 @@ impl<P: Provider> Agent<P> {
     /// Streams a completion; when the model requests tool calls, each one is
     /// dispatched to the matching registered tool, the results are fed back
     /// into the conversation, and the provider is re-invoked. Returns the
-    /// content of the first completion that requests no tool calls.
+    /// content of the first completion that requests no tool calls. A turn
+    /// that streams only a refusal yields the refusal text instead of `""`.
     ///
     /// # Errors:
     ///
@@ -146,14 +147,21 @@ impl<P: Provider> Agent<P> {
             let mut stream = self.provider.complete(request).await?;
 
             let mut content = String::new();
+            let mut refusal = String::new();
             let mut calls: Vec<PendingCall> = Vec::new();
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk?;
                 content.push_str(&chunk.content);
+                if let Some(r) = &chunk.refusal {
+                    refusal.push_str(r);
+                }
                 for delta in chunk.tool_calls {
                     let i = delta.index as usize;
                     if calls.len() <= i {
                         calls.resize_with(i + 1, PendingCall::default);
+                    }
+                    if delta.id.is_some() {
+                        calls[i].id = delta.id;
                     }
                     if delta.name.is_some() {
                         calls[i].name = delta.name;
@@ -163,7 +171,7 @@ impl<P: Provider> Agent<P> {
             }
 
             if calls.is_empty() {
-                return Ok(content);
+                return Ok(if content.is_empty() { refusal } else { content });
             }
 
             messages.push(Message::assistant(render_assistant_turn(&content, &calls)));
@@ -182,7 +190,10 @@ impl<P: Provider> Agent<P> {
                     serde_json::from_str(&call.arguments)?
                 };
                 let output = tool.call(args).await?;
-                messages.push(Message::tool(format!("[{name}] {output}")));
+                messages.push(Message::tool(match call.id.as_deref() {
+                    Some(id) => format!("[{name}:{id}] {output}"),
+                    None => format!("[{name}] {output}"),
+                }));
             }
         }
         Err(Error::Other(format!(
@@ -191,7 +202,7 @@ impl<P: Provider> Agent<P> {
         )))
     }
 
-    /// Run the agent and return the raw completion stream.
+    /// Runs the agent and return the raw completion stream.
     ///
     /// Single-turn: tool calls in the stream are not dispatched, for full loop
     /// use [`invoke`](Self::invoke).
@@ -200,7 +211,7 @@ impl<P: Provider> Agent<P> {
             messages: self.seed_messages(input.into()),
             options: self.options(),
         };
-        Ok(self.provider.complete(request).await?)
+        self.provider.complete(request).await
     }
 }
 
@@ -211,6 +222,7 @@ pub const MAX_TOOL_TURNS: usize = 8;
 /// One tool call reassembled from streamed [`ToolCallDelta`](crate::ToolCallDelta) fragments.
 #[derive(Default)]
 struct PendingCall {
+    id: Option<String>,
     name: Option<String>,
     arguments: String,
 }
@@ -221,11 +233,11 @@ fn render_assistant_turn(content: &str, calls: &[PendingCall]) -> String {
         if !out.is_empty() {
             out.push('\n');
         }
-        out.push_str("[tool_call] ");
-        out.push_str(call.name.as_deref().unwrap_or("?"));
-        out.push('(');
-        out.push_str(&call.arguments);
-        out.push(')');
+        let name = call.name.as_deref().unwrap_or("?");
+        match &call.id {
+            Some(id) => out.push_str(&format!("[tool_call:{id}] {name}({})", call.arguments)),
+            None => out.push_str(&format!("[tool_call] {name}({})", call.arguments)),
+        }
     }
     out
 }
