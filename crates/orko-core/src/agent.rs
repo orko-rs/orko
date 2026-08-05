@@ -2,7 +2,7 @@
 
 use crate::{
     CompletionOptions, CompletionRequest, CompletionStream, Error, Message, Prompt, Provider,
-    Result, Tool,
+    Result, Tool, ToolRegistry,
 };
 use futures::StreamExt;
 use std::sync::Arc;
@@ -69,17 +69,17 @@ impl<P: Provider> AgentBuilder<P> {
 
     /// Finalize into an [`Agent`].
     ///
-    /// Sorts the tools by name; [`Agent::invoke`] binary-searches them when
-    /// dispatching tool calls.
-    pub fn build(mut self) -> Agent<P> {
-        self.tools.sort_by(|a, b| a.name().cmp(b.name()));
-        Agent {
+    /// # Errors
+    ///
+    /// [`Error::Config`] if two registered tools share a name.
+    pub fn build(self) -> Result<Agent<P>> {
+        Ok(Agent {
             provider: self.provider,
             model: self.model,
             system_prompt: self.system_prompt,
-            tools: self.tools,
+            tools: ToolRegistry::new(self.tools)?,
             max_tool_turns: self.max_tool_turns,
-        }
+        })
     }
 }
 
@@ -94,14 +94,14 @@ pub struct Agent<P: Provider> {
     provider: P,
     model: Option<String>,
     system_prompt: Option<String>,
-    tools: Vec<Arc<dyn Tool>>,
+    tools: ToolRegistry,
     max_tool_turns: usize,
 }
 
 impl<P: Provider> Agent<P> {
     /// The tools registered on this agent, sorted by name.
     pub fn tools(&self) -> &[Arc<dyn Tool>] {
-        &self.tools
+        self.tools.as_slice()
     }
 
     /// The system prompt (if any) followed by the prompt's messages.
@@ -117,7 +117,7 @@ impl<P: Provider> Agent<P> {
     fn options(&self) -> CompletionOptions {
         CompletionOptions {
             model: self.model.clone(),
-            tools: self.tools.iter().map(|t| t.spec()).collect(),
+            tools: self.tools.as_slice().iter().map(|t| t.spec()).collect(),
             ..Default::default()
         }
     }
@@ -130,7 +130,7 @@ impl<P: Provider> Agent<P> {
     /// content of the first completion that requests no tool calls. A turn
     /// that streams only a refusal yields the refusal text instead of `""`.
     ///
-    /// # Errors:
+    /// # Errors
     ///
     /// Besides provider errors: a call to a tool that isn't registered is
     /// [`Error::ToolExecution`], unparseable call arguments are
@@ -177,13 +177,9 @@ impl<P: Provider> Agent<P> {
             messages.push(Message::assistant(render_assistant_turn(&content, &calls)));
             for call in calls {
                 let name = call.name.as_deref().unwrap_or_default();
-                let tool = self
-                    .tools
-                    .binary_search_by(|t| t.name().cmp(name))
-                    .map(|i| &self.tools[i])
-                    .map_err(|_| {
-                        Error::ToolExecution(format!("model called unknown tool `{name}`"))
-                    })?;
+                let tool = self.tools.get(name).ok_or_else(|| {
+                    Error::ToolExecution(format!("model called an unknown tool `{name}`"))
+                })?;
                 let args = if call.arguments.trim().is_empty() {
                     serde_json::Value::Object(Default::default())
                 } else {
@@ -196,8 +192,8 @@ impl<P: Provider> Agent<P> {
                 }));
             }
         }
-        Err(Error::Other(format!(
-            "tool-call loop still requesting tools after {} turns",
+        Err(Error::ToolCallDepth(format!(
+            "tool-call loop still requesting tools after the allowed limit of {} turns",
             self.max_tool_turns
         )))
     }

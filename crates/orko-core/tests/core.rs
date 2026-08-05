@@ -42,8 +42,8 @@ fn cloned_builder_templates_multiple_agents() {
     }
 
     let base = create_agent(std::sync::Arc::new(EchoModel)).with_system_prompt("terse");
-    let fast = base.clone().with_model("mini").build();
-    let smart = base.with_model("maxi").build();
+    let fast = base.clone().with_model("mini").build().unwrap();
+    let smart = base.with_model("maxi").build().unwrap();
 
     assert_eq!(
         futures::executor::block_on(fast.invoke("hi")).unwrap(),
@@ -157,7 +157,8 @@ fn invoke_runs_the_tool_call_loop() {
         Arc::new(Named("alpha")),
     ])
     .with_tool(Arc::new(Doubler))
-    .build();
+    .build()
+    .unwrap();
 
     let names: Vec<_> = agent.tools().iter().map(|t| t.name()).collect();
     assert_eq!(names, ["alpha", "double", "zeta"]);
@@ -181,7 +182,7 @@ fn refusal_only_turn_is_not_an_empty_success() {
         }
     }
 
-    let agent = create_agent(Refuser).build();
+    let agent = create_agent(Refuser).build().unwrap();
     assert_eq!(
         futures::executor::block_on(agent.invoke("hi")).unwrap(),
         "no can do"
@@ -233,9 +234,54 @@ fn invoke_errors_when_turn_cap_exhausted() {
     let agent = create_agent(AlwaysCalls)
         .with_tool(Arc::new(Noop))
         .with_max_tool_turns(2)
-        .build();
+        .build()
+        .unwrap();
     let err = futures::executor::block_on(agent.invoke("hi")).unwrap_err();
     assert!(matches!(err, Error::Other(_)), "got: {err}");
+}
+
+#[test]
+fn duplicate_tool_names_rejected_at_build() {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+
+    struct Silent;
+    impl Provider for Silent {
+        async fn complete(&self, _request: CompletionRequest) -> Result<CompletionStream> {
+            let stream: CompletionStream =
+                Box::pin(futures::stream::iter([Ok(CompletionChunk::default())]));
+            Ok(stream)
+        }
+    }
+
+    struct Dup;
+    impl Tool for Dup {
+        fn name(&self) -> &str {
+            "dup"
+        }
+        fn description(&self) -> &str {
+            ""
+        }
+        fn parameters_schema(&self) -> serde_json::Value {
+            serde_json::json!({"type": "object"})
+        }
+        fn call<'a>(
+            &'a self,
+            _args: serde_json::Value,
+        ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+    }
+
+    let err = match create_agent(Silent)
+        .with_tools([Arc::new(Dup) as Arc<dyn Tool>, Arc::new(Dup)])
+        .build()
+    {
+        Ok(_) => panic!("duplicate tool names were accepted"),
+        Err(e) => e,
+    };
+    assert!(matches!(err, Error::Config(_)), "got: {err}");
 }
 
 #[test]

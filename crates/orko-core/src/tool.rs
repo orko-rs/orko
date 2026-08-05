@@ -1,15 +1,10 @@
 //! The [`Tool`] trait: a capability the model can invoke by name.
-//!
-//! TODO: `ToolRegistry` — newtype over the sorted `Vec<Arc<dyn Tool>>` that owns
-//! the invariants (sorted by name, duplicates rejected as `Error::Config`) and
-//! the lookup (`get(name)` via binary search). Would absorb the inline sort in
-//! `AgentBuilder::build` and the search in `Agent::invoke`; currently duplicates
-//! silently shadow. Add when a second lookup call site or a dedup bug shows up.
 
-use crate::Result;
+use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 /// The wire description of a tool, handed to a provider so the model knows the
 /// tool exists and how to call it.
@@ -59,5 +54,43 @@ pub trait Tool: Send + Sync {
             description: self.description().to_owned(),
             parameters: self.parameters_schema(),
         }
+    }
+}
+
+/// An agent's tool set, indexed by name.
+///
+/// Owns the invariants the lookup relies on: the tools are sorted by name and
+/// names are unique.
+pub struct ToolRegistry(Vec<Arc<dyn Tool>>);
+
+impl ToolRegistry {
+    /// Build a registry from `tools`, sorting them by name.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Config`] if two tools share a name.
+    pub fn new(tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Result<Self> {
+        let mut tools: Vec<_> = tools.into_iter().collect();
+        tools.sort_by(|a, b| a.name().cmp(b.name()));
+        if let Some(pair) = tools.windows(2).find(|w| w[0].name() == w[1].name()) {
+            return Err(Error::Config(format!(
+                "duplicate tool name `{}`",
+                pair[0].name()
+            )));
+        }
+        Ok(Self(tools))
+    }
+
+    /// Looks up a tool by name.
+    pub fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
+        self.0
+            .binary_search_by(|t| t.name().cmp(name))
+            .ok()
+            .map(|i| &self.0[i])
+    }
+
+    /// The tools, sorted by name.
+    pub fn as_slice(&self) -> &[Arc<dyn Tool>] {
+        &self.0
     }
 }

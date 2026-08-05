@@ -22,9 +22,13 @@ pub enum Error {
     #[error("tool execution error: {0}")]
     ToolExecution(String),
 
-    /// Invalid or missing configuration (bad model id, missing API key, …).
+    /// Invalid or missing configuration (tool name, etc).
     #[error("configuration error: {0}")]
     Config(String),
+
+    /// Maximum allowed tool call depth exceeded.
+    #[error("tool call depth error: {0}")]
+    ToolCallDepth(String),
 
     /// Anything that does not fit the categories above.
     #[error("{0}")]

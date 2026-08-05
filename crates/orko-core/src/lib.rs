@@ -19,7 +19,7 @@
 //! # async fn demo(p: impl Provider) -> orko_core::Result<()> {
 //! let agent = create_agent(p)
 //!     .with_system_prompt("You are a helpful assistant.")
-//!     .build();
+//!     .build()?;
 //! let reply = agent.invoke("Hello!").await?;
 //! println!("{reply}");
 //! # Ok(())
@@ -48,4 +48,4 @@ pub use provider::{
     DynProvider, FinishReason, Provider, ToolCallDelta, Usage,
 };
 pub use router::{ModelRouter, StaticRouter};
-pub use tool::{Tool, ToolSpec};
+pub use tool::{Tool, ToolRegistry, ToolSpec};
