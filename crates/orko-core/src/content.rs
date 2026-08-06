@@ -72,7 +72,7 @@ impl MediaSource {
 ///   "name": "orca.pdf"
 /// }
 /// ```
-// TODO: `Audio` / `Video` variants — deferred until a provider can consume
+// TODO: `Audio` / `Video`, and `Citation` variants — deferred until a provider can consume
 // them.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

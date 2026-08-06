@@ -186,6 +186,9 @@ impl<P: Provider> Agent<P> {
             messages.push(Message::assistant(Self::render_assistant_turn(
                 &content, &calls,
             )));
+            // TODO: parallel dispatch — run a turn's calls concurrently with
+            // `futures::future::join_all` (intra-task concurrency, executor-
+            // independent), never by spawning; keeps invoke runtime-agnostic.
             for call in calls {
                 let name = call.name.as_deref().unwrap_or_default();
                 let output = self.run_tool(name, &call.arguments).await;

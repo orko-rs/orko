@@ -82,7 +82,7 @@ pub trait Tool: Send + Sync {
 ///
 /// Owns the invariants the lookup relies on: the tools are sorted by name and
 /// names are unique.
-pub struct ToolRegistry(Vec<Arc<dyn Tool>>);
+pub(crate) struct ToolRegistry(Vec<Arc<dyn Tool>>);
 
 impl ToolRegistry {
     /// Builds a registry from `tools`, sorting them by name.
@@ -90,7 +90,7 @@ impl ToolRegistry {
     /// # Errors
     ///
     /// [`Error::Config`] if two tools share a name.
-    pub fn new(tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Result<Self> {
+    pub(crate) fn new(tools: impl IntoIterator<Item = Arc<dyn Tool>>) -> Result<Self> {
         let mut tools: Vec<_> = tools.into_iter().collect();
         tools.sort_by(|a, b| a.name().cmp(b.name()));
         if let Some(pair) = tools.windows(2).find(|w| w[0].name() == w[1].name()) {
@@ -103,7 +103,7 @@ impl ToolRegistry {
     }
 
     /// Looks up a tool by name.
-    pub fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
+    pub(crate) fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
         self.0
             .binary_search_by(|t| t.name().cmp(name))
             .ok()
@@ -111,7 +111,7 @@ impl ToolRegistry {
     }
 
     /// The tools, sorted by name.
-    pub fn as_slice(&self) -> &[Arc<dyn Tool>] {
+    pub(crate) fn as_slice(&self) -> &[Arc<dyn Tool>] {
         &self.0
     }
 }

@@ -32,6 +32,7 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+#![warn(unreachable_pub)]
 
 mod agent;
 mod content;
@@ -56,4 +57,6 @@ pub use provider::{
     DynProvider, FinishReason, Provider, ToolCallDelta, Usage,
 };
 pub use router::{ModelRouter, StaticRouter};
-pub use tool::{Tool, ToolRegistry, ToolSpec};
+pub use tool::{Tool, ToolSpec};
+
+pub(crate) use tool::ToolRegistry;
