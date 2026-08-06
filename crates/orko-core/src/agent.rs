@@ -105,6 +105,11 @@ impl<P: Provider> Agent<P> {
     }
 
     /// The system prompt (if any) followed by the prompt's messages.
+    // TODO: RAG context injection happens here — a future
+    // `AgentBuilder::with_retriever(r)` retrieves against the prompt per
+    // invoke and prepends the results as context (classic RAG). Agentic RAG
+    // needs no new surface: wrap a retriever as a `Tool` and the model
+    // decides when to search.
     fn seed_messages(&self, prompt: Prompt) -> Vec<Message> {
         let mut messages = Vec::with_capacity(prompt.messages.len() + 1);
         if let Some(sp) = &self.system_prompt {

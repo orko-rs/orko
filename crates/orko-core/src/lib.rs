@@ -8,8 +8,8 @@
 //!
 //! A [`Provider`] maps messages to a stream of completion chunks. It is
 //! deliberately HTTP-agnostic: an OpenAI-compatible HTTP client and an
-//! in-process Candle engine implement the *same* trait. See [`provider`] for the
-//! generic-vs-erased design ([`BoxProvider`]).
+//! in-process Candle engine implement the *same* trait. See [`Provider`]'s docs
+//! for the generic-vs-erased design ([`BoxProvider`]).
 //!
 //! ## Building an agent
 //!
@@ -34,13 +34,21 @@
 #![warn(missing_docs)]
 
 mod agent;
+mod content;
 mod error;
 mod message;
 mod provider;
 mod router;
 mod tool;
 
+// TODO: RAG — a `retrieval` module with the core trait set, shaped like
+// `provider`: `Document` (content + metadata), `Embedder` (text -> Vec<f32>),
+// `Retriever` (query -> Vec<Document>). Traits live here, runtime-agnostic and
+// HTTP-free; implementations (embedding endpoints, vector stores) belong in
+// orko-providers or user crates. Add when the first retriever consumer lands.
+
 pub use agent::{create_agent, Agent, AgentBuilder, MAX_TOOL_TURNS};
+pub use content::{Content, ContentPart, ContentView, MediaSource};
 pub use error::{Error, Result};
 pub use message::{Message, Prompt, Role};
 pub use provider::{

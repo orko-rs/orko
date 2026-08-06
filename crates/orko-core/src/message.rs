@@ -1,5 +1,7 @@
-//! Conversation primitives: [`Role`], [`Message`], and the [`Prompt`] input type.
+//! Conversation primitives: [`Role`], [`Message`], and the [`Prompt`] input
+//! type. Message content lives in [`crate::content`].
 
+use crate::content::Content;
 use serde::{Deserialize, Serialize};
 
 /// The author of a [`Message`].
@@ -18,40 +20,43 @@ pub enum Role {
 
 /// A single turn in a conversation.
 ///
-/// Content is a plain `String` for now. Multi-part / multimodal content is a
-/// planned extension and will land as a breaking change pre-1.0.
+/// # Serialized example
+///
+/// ```json
+/// {"role": "user", "content": "hello"}
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
     /// Who authored this message.
     pub role: Role,
-    /// The message text.
-    pub content: String,
+    /// What it says: plain text or multi-part.
+    pub content: Content,
 }
 
 impl Message {
-    /// Build a [`Role::System`] message.
-    pub fn system(content: impl Into<String>) -> Self {
+    /// Builds a [`Role::System`] message.
+    pub fn system(content: impl Into<Content>) -> Self {
         Self {
             role: Role::System,
             content: content.into(),
         }
     }
-    /// Build a [`Role::User`] message.
-    pub fn user(content: impl Into<String>) -> Self {
+    /// Builds a [`Role::User`] message.
+    pub fn user(content: impl Into<Content>) -> Self {
         Self {
             role: Role::User,
             content: content.into(),
         }
     }
-    /// Build a [`Role::Assistant`] message.
-    pub fn assistant(content: impl Into<String>) -> Self {
+    /// Builds a [`Role::Assistant`] message.
+    pub fn assistant(content: impl Into<Content>) -> Self {
         Self {
             role: Role::Assistant,
             content: content.into(),
         }
     }
-    /// Build a [`Role::Tool`] message.
-    pub fn tool(content: impl Into<String>) -> Self {
+    /// Builds a [`Role::Tool`] message.
+    pub fn tool(content: impl Into<Content>) -> Self {
         Self {
             role: Role::Tool,
             content: content.into(),

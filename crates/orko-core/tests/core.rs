@@ -10,6 +10,73 @@ fn message_roundtrips_through_json() {
 }
 
 #[test]
+fn multipart_content_roundtrips_through_json() {
+    let msg = Message::user(vec![
+        ContentPart::text("what is in this image?"),
+        ContentPart::image_url("https://example.com/cat.png"),
+    ]);
+    let json = serde_json::to_string(&msg).unwrap();
+    assert_eq!(
+        json,
+        r#"{"role":"user","content":[{"type":"text","text":"what is in this image?"},{"type":"image","source":{"kind":"url","url":"https://example.com/cat.png"}}]}"#
+    );
+    let back: Message = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, msg);
+}
+
+#[test]
+fn file_content_part_roundtrips_through_json() {
+    let msg = Message::user(vec![ContentPart::File {
+        source: MediaSource::base64("application/pdf", "aGVsbG8="),
+        name: Some("hello.pdf".into()),
+    }]);
+    let json = serde_json::to_string(&msg).unwrap();
+    assert_eq!(
+        json,
+        r#"{"role":"user","content":[{"type":"file","source":{"kind":"base64","mime_type":"application/pdf","data":"aGVsbG8="},"name":"hello.pdf"}]}"#
+    );
+    let back: Message = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, msg);
+}
+
+#[test]
+fn content_push_part_promotes_text_to_parts() {
+    let mut c: Content = "hi".into();
+    c.push_part(ContentPart::image_url("https://example.com/cat.png"));
+    let ContentView::Parts(parts) = c.pull() else {
+        panic!("promoted to Parts");
+    };
+    assert_eq!(parts.len(), 2);
+    assert!(matches!(&parts[0], ContentPart::Text { text } if text == "hi"));
+    assert!(matches!(&parts[1], ContentPart::Image { .. }));
+
+    c.push_part(ContentPart::text("more"));
+    assert!(matches!(c.pull(), ContentView::Parts(p) if p.len() == 3));
+
+    // Empty text is dropped on promotion, not kept as an empty part.
+    let mut empty: Content = "".into();
+    empty.push_part(ContentPart::image_url("https://example.com/cat.png"));
+    assert!(matches!(empty.pull(), ContentView::Parts(p) if p.len() == 1));
+}
+
+#[test]
+fn content_push_text_appends_by_variant() {
+    // Onto Text: plain concatenation.
+    let mut t: Content = "he".into();
+    t.push_text("llo");
+    assert_eq!(t.pull(), ContentView::Text("hello"));
+
+    // Onto Parts: appended as a new text part.
+    let mut p: Content = vec![ContentPart::image_url("https://example.com/cat.png")].into();
+    p.push_text("caption");
+    let ContentView::Parts(parts) = p.pull() else {
+        panic!("still Parts");
+    };
+    assert_eq!(parts.len(), 2);
+    assert!(matches!(&parts[1], ContentPart::Text { text } if text == "caption"));
+}
+
+#[test]
 fn prompt_from_str_wraps_a_user_message() {
     let prompt: Prompt = "hi".into();
     assert_eq!(prompt.messages.len(), 1);
@@ -132,12 +199,11 @@ fn invoke_runs_the_tool_call_loop() {
                 _ => {
                     assert!(request.messages.iter().any(|m| {
                         m.role == Role::Assistant
-                            && m.content == r#"[tool_call:c1] double({"x":3})"#
+                            && m.content.pull()
+                                == ContentView::Text(r#"[tool_call:c1] double({"x":3})"#)
                     }));
-                    assert!(request
-                        .messages
-                        .iter()
-                        .any(|m| m.role == Role::Tool && m.content == "[double:c1] 6"));
+                    assert!(request.messages.iter().any(|m| m.role == Role::Tool
+                        && m.content.pull() == ContentView::Text("[double:c1] 6")));
                     vec![Ok(CompletionChunk {
                         content: "six".into(),
                         ..Default::default()
@@ -303,7 +369,10 @@ fn tool_failures_feed_back_for_self_correction() {
                         .messages
                         .iter()
                         .filter(|m| m.role == Role::Tool)
-                        .map(|m| m.content.as_str())
+                        .filter_map(|m| match m.content.pull() {
+                            ContentView::Text(t) => Some(t),
+                            ContentView::Parts(_) => None,
+                        })
                         .collect();
                     assert!(tool_results
                         .iter()

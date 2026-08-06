@@ -1,5 +1,10 @@
 //! The [`Tool`] trait: a capability the model can invoke by name.
 
+// TODO: `retrieval_tool` — adapter exposing a future `Retriever` as a
+// `Tool` (agentic RAG): spec is `{"query": string}`, `call` runs the
+// search and formats the hits. Gives agents RAG through the existing
+// tool-calling loop, zero new `Agent` surface.
+
 use crate::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -11,6 +16,22 @@ use std::sync::Arc;
 ///
 /// This is the JSON-schema-bearing struct that [`orko-macros`](../orko_macros)
 /// generates from a function signature.
+///
+/// # Serialized example
+///
+/// ```json
+/// {
+///   "name": "add_numbers",
+///   "description": "Perform addition on two numbers.",
+///   "parameters": {
+///     "type": "object",
+///     "properties": {
+///       "a": {"type": "number"},
+///       "b": {"type": "number"}
+///     }
+///   }
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolSpec {
     /// Unique tool name (usually the source function name).
@@ -23,11 +44,11 @@ pub struct ToolSpec {
 
 /// A capability the agent can call while answering.
 ///
-/// Object-safe on purpose: agents hold `Arc<dyn Tool>` so tools of different
-/// concrete types can live in one collection. Because it must be object-safe,
+/// Object-safe on purpose since agents hold `Arc<dyn Tool>` so tools of different
+/// concrete types can live in one collection. Must be object-safe,
 /// [`Tool::call`] returns a boxed future rather than using `async fn` (which is
-/// not yet object-safe in traits). No Tokio types appear here — the future is a
-/// plain `std::future::Future`.
+/// not yet object-safe in traits), also to keep the tool execution isolated and
+/// runtime-agnostic.
 pub trait Tool: Send + Sync {
     /// The tool's unique name.
     fn name(&self) -> &str;
@@ -47,7 +68,7 @@ pub trait Tool: Send + Sync {
         args: serde_json::Value,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 
-    /// Build the [`ToolSpec`] sent to providers. Defaulted from the accessors.
+    /// Builds the [`ToolSpec`] sent to providers. Defaulted from the accessors.
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: self.name().to_owned(),
@@ -64,7 +85,7 @@ pub trait Tool: Send + Sync {
 pub struct ToolRegistry(Vec<Arc<dyn Tool>>);
 
 impl ToolRegistry {
-    /// Build a registry from `tools`, sorting them by name.
+    /// Builds a registry from `tools`, sorting them by name.
     ///
     /// # Errors
     ///
