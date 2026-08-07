@@ -1,0 +1,26 @@
+[package]
+name = "orko"
+version.workspace = true
+description = "Agent orchestration toolkit for Rust, batteries-included facade"
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+orko-core.workspace = true
+orko-macros = { workspace = true, optional = true }
+orko-providers = { workspace = true, optional = true }
+orko-graph = { workspace = true, optional = true }
+orko-mcp = { workspace = true, optional = true }
+orko-runtime = { workspace = true, optional = true }
+
+[features]
+default = ["providers"]
+core = []
+macros = ["dep:orko-macros"]
+providers = ["dep:orko-providers"]
+graph = ["dep:orko-graph"]
+mcp = ["dep:orko-mcp"]
+runtime = ["dep:orko-runtime", "graph"]
+full = ["macros", "providers", "graph", "mcp", "runtime"]

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/orko",
     "crates/orko-core",
     "crates/orko-macros",
     "crates/orko-graph",

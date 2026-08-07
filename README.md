@@ -23,13 +23,13 @@ async fn demo(p: impl Provider) -> Result<()> {
 
 | Crate                                     | Purpose                                                                            |     Status     | Notes                                                                      |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | :------------: | -------------------------------------------------------------------------- |
-| [`orko-core`](crates/orko-core)           | Core traits & types — `Provider`, `Agent`, `Tool`, `ModelRouter`, streaming chunks | **reforming**  | API-frozen · 4 unit tests + 1 doctest passing · `clippy -D warnings` clean |
+| [`orko-core`](crates/orko-core)           | Core traits & types — `Provider`, `Agent`, `Tool`, `ModelRouter`, streaming chunks |    **beta**    | API-frozen · 4 unit tests + 1 doctest passing · `clippy -D warnings` clean |
 | [`orko-macros`](crates/orko-macros)       | Proc macros (ergonomic tool definitions)                                           | 🩻 Scaffolded  | Empty stub — next in build order                                           |
 | [`orko-providers`](crates/orko-providers) | Provider implementations (OpenAI-compatible HTTP + SSE, local inference)           | 🩻 Scaffolded  | Empty stub                                                                 |
 | [`orko-graph`](crates/orko-graph)         | Graph-based multi-agent workflows                                                  | 🩻 Scaffolded  | Empty stub                                                                 |
 | [`orko-runtime`](crates/orko-runtime)     | Tokio runtime integration & task spawning                                          | 🩻 Scaffolded  | Empty stub — the _only_ crate allowed to touch tokio                       |
 | [`orko-mcp`](crates/orko-mcp)             | Model Context Protocol integration                                                 | 🩻 Scaffolded  | Empty stub                                                                 |
-| `orko` (facade)                           | Single-dependency entry point re-exporting the workspace                           | ⬜ Not started | Created last, once the pieces exist                                        |
+| `orko` (facade)                           | Single-dependency entry point re-exporting the workspace                           | in development | Created last, once the pieces exist                                        |
 
 <!--### What works today (`orko-core`)
 
