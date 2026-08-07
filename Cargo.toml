@@ -19,7 +19,6 @@ edition = "2021"
 rust-version = "1.82"
 
 [workspace.dependencies]
-# --- shared third-party deps, pinned once ---
 tokio = { version = "1", default-features = false }
 futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
 serde = { version = "1", features = ["derive"] }
