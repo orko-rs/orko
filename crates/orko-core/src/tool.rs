@@ -68,6 +68,20 @@ pub trait Tool: Send + Sync {
         args: serde_json::Value,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 
+    /// Runs the tool to completion on the current thread and returns the result.
+    ///
+    /// Identical semantics to [`Tool::call`] for both sync and async tools.
+    /// It drives the returned future with a minimal single-threaded executor.
+    ///
+    /// ## Note:
+    ///
+    /// Use it from synchronous contexts (tests, CLIs, scripts).
+    /// Inside an async runtime, this method blocks the current thread until
+    /// the tool finishes, use `.await` on [`Tool::call`] instead.
+    fn call_blocking(&self, args: serde_json::Value) -> Result<String> {
+        futures::executor::block_on(self.call(args))
+    }
+
     /// Builds the [`ToolSpec`] sent to providers. Defaulted from the accessors.
     fn spec(&self) -> ToolSpec {
         ToolSpec {

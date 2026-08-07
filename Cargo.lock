@@ -132,7 +132,6 @@ version = "0.1.0"
 name = "orko-macros"
 version = "0.1.0"
 dependencies = [
- "futures",
  "orko-core",
  "proc-macro2",
  "quote",
