@@ -46,7 +46,7 @@ mod tool;
 // `provider`: `Document` (content + metadata), `Embedder` (text -> Vec<f32>),
 // `Retriever` (query -> Vec<Document>). Traits live here, runtime-agnostic and
 // HTTP-free; implementations (embedding endpoints, vector stores) belong in
-// orko-providers or user crates. Add when the first retriever consumer lands.
+// orko-providers or user crates.
 
 pub use agent::{create_agent, Agent, AgentBuilder, MAX_TOOL_TURNS};
 pub use content::{Content, ContentPart, ContentView, MediaSource};
@@ -58,5 +58,12 @@ pub use provider::{
 };
 pub use router::{ModelRouter, StaticRouter};
 pub use tool::{Tool, ToolSpec};
+
+// Not public API. Support for `#[orko_macros::tool]` expansions, which need a
+// serde_json path that resolves in the user's crate without a direct dep.
+#[doc(hidden)]
+pub mod __private {
+    pub use serde_json;
+}
 
 pub(crate) use tool::ToolRegistry;
