@@ -1,6 +1,6 @@
 //! # orko-core
 //!
-//! The frozen, dependency-light heart of the [orko](https://github.com/orko-rs/orko)
+//! The small, dependency-light heart of the [orko](https://github.com/orko-rs/orko)
 //! agent-orchestration toolkit. It defines the traits and value types every
 //! other crate builds on and nothing else — no HTTP, no runtime, no transport.
 //!
@@ -10,21 +10,6 @@
 //! deliberately HTTP-agnostic: an OpenAI-compatible HTTP client and an
 //! in-process Candle engine implement the *same* trait. See [`Provider`]'s docs
 //! for the generic-vs-erased design ([`BoxProvider`]).
-//!
-//! ## Building an agent
-//!
-//! ```no_run
-//! use orko_core::{create_agent, Provider};
-//!
-//! # async fn demo(p: impl Provider) -> orko_core::Result<()> {
-//! let agent = create_agent(p)
-//!     .with_system_prompt("You are a helpful assistant.")
-//!     .build()?;
-//! let reply = agent.invoke("Hello!").await?;
-//! println!("{reply}");
-//! # Ok(())
-//! # }
-//! ```
 //!
 //! ## Stability
 //!

@@ -1,6 +1,6 @@
 //! # orko
 //!
-//! Batteries-included facade for the [orko](https://github.com/orko-rs/orko)
+//! The batteries-included facade for the [orko](https://github.com/orko-rs/orko)
 //! agent-orchestration toolkit. Everything from `orko-core` is re-exported at
 //! the root; the other crates sit behind cargo features:
 //!
@@ -13,7 +13,7 @@
 //! | `runtime` | `orko::runtime` (Tokio-backed execution; implies `graph`) | no |
 //! | `full` | all of the above | no |
 //!
-//! ## Building an agent
+//! ## Building an agent:
 //!
 //! ```no_run
 //! use orko::{create_agent, Provider};
@@ -38,13 +38,10 @@
 
 pub use orko_core::*;
 
-// The gated crates are still empty placeholders; the allows silence the
-// nothing-to-re-export warnings and MUST be dropped as each crate gains items.
+// providers/graph/mcp/runtime are still empty placeholders
 
-// TODO: narrow to `pub use orko_macros::tool;` once the #[tool] macro lands.
 #[cfg(feature = "macros")]
-#[allow(unused_imports, unreachable_pub)]
-pub use orko_macros::*;
+pub use orko_macros::tool;
 
 /// Provider implementations: OpenAI-compatible engine and presets.
 #[cfg(feature = "providers")]
