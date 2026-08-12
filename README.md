@@ -31,6 +31,31 @@ async fn demo(p: impl Provider) -> Result<()> {
 | [`orko-mcp`](crates/orko-mcp)             | Model Context Protocol integration                                                 |  🩻 Scaffolded  | Empty stub                                                                 |
 | `orko` (facade)                           | Single-dependency entry point re-exporting the workspace                           | **development** | Created last, once the pieces exist                                        |
 
+### Providers status
+
+Every provider is tracked as an issue under the
+[`crate: providers`](https://github.com/orko-rs/orko/labels/crate%3A%20providers) label.
+The OpenAI-compatible engine ([#3](https://github.com/orko-rs/orko/issues/3)) is the
+foundation — everything marked _preset_ is a thin configuration over it, while _codec_
+rows implement a new wire format sharing the same transport.
+
+| Provider   | Kind                     | Env key              |                  Tracking issue                  |   Status    |
+| ---------- | ------------------------ | -------------------- | :----------------------------------------------: | :---------: |
+| OpenAI     | engine + preset          | `OPENAI_API_KEY`     |  [#3](https://github.com/orko-rs/orko/issues/3)  | **planned** |
+| Anthropic  | native codec             | `ANTHROPIC_API_KEY`  |  [#6](https://github.com/orko-rs/orko/issues/6)  | **planned** |
+| Google     | preset (compat endpoint) | `GEMINI_API_KEY`     |  [#4](https://github.com/orko-rs/orko/issues/4)  | **planned** |
+| DeepSeek   | preset                   | `DEEPSEEK_API_KEY`   |  [#5](https://github.com/orko-rs/orko/issues/5)  | **planned** |
+| Groq       | preset                   | `GROQ_API_KEY`       |  [#7](https://github.com/orko-rs/orko/issues/7)  | **planned** |
+| Together   | preset                   | `TOGETHER_API_KEY`   |  [#8](https://github.com/orko-rs/orko/issues/8)  | **planned** |
+| OpenRouter | preset                   | `OPENROUTER_API_KEY` |  [#9](https://github.com/orko-rs/orko/issues/9)  | **planned** |
+| Moonshot   | preset                   | `MOONSHOT_API_KEY`   | [#10](https://github.com/orko-rs/orko/issues/10) | **planned** |
+| Qwen       | preset                   | `DASHSCOPE_API_KEY`  | [#11](https://github.com/orko-rs/orko/issues/11) | **planned** |
+| Ollama     | preset (local, no auth)  | —                    | [#12](https://github.com/orko-rs/orko/issues/12) | **planned** |
+| vLLM       | preset (local)           | `VLLM_API_KEY`¹      | [#13](https://github.com/orko-rs/orko/issues/13) | **planned** |
+| llama.cpp  | preset (local)           | `LLAMACPP_API_KEY`¹  | [#14](https://github.com/orko-rs/orko/issues/14) | **planned** |
+
+¹ optional — only sent when the server enforces auth.
+
 <!--### What works today (`orko-core`)
 
 | Area      | Delivered                                                                                                                       |
