@@ -53,8 +53,9 @@ rows implement a new wire format sharing the same transport.
 | Ollama     | preset (local, no auth)  | —                    | [#12](https://github.com/orko-rs/orko/issues/12) | **planned** |
 | vLLM       | preset (local)           | `VLLM_API_KEY`¹      | [#13](https://github.com/orko-rs/orko/issues/13) | **planned** |
 | llama.cpp  | preset (local)           | `LLAMACPP_API_KEY`¹  | [#14](https://github.com/orko-rs/orko/issues/14) | **planned** |
+| Candle     | in-process (no HTTP)     | `HF_TOKEN`¹          | [#15](https://github.com/orko-rs/orko/issues/15) | **planned** |
 
-¹ optional — only sent when the server enforces auth.
+¹ optional — only sent when the server enforces auth (Candle: only for gated Hub repos).
 
 <!--### What works today (`orko-core`)
 
