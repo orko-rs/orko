@@ -4,6 +4,7 @@ version.workspace = true
 description = "Agent orchestration toolkit for Rust, batteries-included facade"
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
 edition.workspace = true
 rust-version.workspace = true
 
