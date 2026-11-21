@@ -6,7 +6,7 @@
 //!
 //! | Feature | Brings in | Default |
 //! |---|---|---|
-//! | `providers` | `orko::providers` (OpenAI-compatible providers: `openai`, `deepseek`, `from_str`) | yes |
+//! | `providers` | `orko::providers` (OpenAI-compatible presets such as `openai`, `deepseek`, `ollama`, plus `from_str`) | yes |
 //! | `macros` | the `#[tool]` attribute macro | no |
 //! | `graph` | `orko::graph` (event graphs) | no |
 //! | `mcp` | `orko::mcp` (MCP client/server) | no |
@@ -49,7 +49,7 @@ pub use orko_core::*;
 #[cfg(feature = "macros")]
 pub use orko_macros::tool;
 
-/// OpenAI-compatible providers and their presets (`openai`, `deepseek`).
+/// OpenAI-compatible providers and their presets (`openai`, `deepseek`, `groq`, `ollama` and more).
 #[cfg(feature = "providers")]
 pub mod providers {
     pub use orko_providers::*;

@@ -3,7 +3,7 @@ use futures::{stream, StreamExt};
 use orko_core::*;
 use orko_providers::codec::{build_request, parse_stream};
 use orko_providers::{
-    deepseek, from_str, openai, HttpResponse, OpenAiCompatible, Quirks, Transport,
+    deepseek, from_str, mistral, ollama, openai, HttpResponse, OpenAiCompatible, Quirks, Transport,
 };
 use serde_json::json;
 use std::convert::Infallible;
@@ -390,4 +390,48 @@ mod tokio_transport {
             .unwrap();
         assert!(err.to_string().contains("timed out"), "{err}");
     }
+}
+
+#[test]
+fn every_preset_resolves_and_quirks_apply() {
+    for name in [
+        "deepseek",
+        "gemini",
+        "groq",
+        "huggingface",
+        "llamacpp",
+        "mistral",
+        "moonshot",
+        "nvidia",
+        "ollama",
+        "openai",
+        "openrouter",
+        "perplexity",
+        "qwen",
+        "together",
+        "vllm",
+        "xai",
+        "zai",
+    ] {
+        assert!(
+            from_str(&format!("{name}:some/model:tag")).is_ok(),
+            "{name}"
+        );
+    }
+
+    let t = stub(200, "data: [DONE]\n\n");
+    let req = || CompletionRequest::new(vec![Message::user("x")]);
+    let _ = block_on(ollama("llama3.2").with_transport(t.clone()).complete(req())).unwrap();
+    let (url, headers, _) = t.seen.lock().unwrap().take().unwrap();
+    assert_eq!(url, "http://localhost:11434/v1/chat/completions");
+    assert!(!headers.iter().any(|(k, _)| k == "authorization"));
+
+    let _ = block_on(
+        mistral("mistral-small-latest")
+            .with_transport(t.clone())
+            .complete(req()),
+    )
+    .unwrap();
+    let (_, _, body) = t.seen.lock().unwrap().take().unwrap();
+    assert!(body.get("stream_options").is_none());
 }

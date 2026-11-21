@@ -7,9 +7,31 @@ let agent = orko_core::create_agent(orko_providers::openai("gpt-4o-mini")).build
 println!("{}", agent.invoke("Hello!").await?);
 ```
 
-There are two presets. `openai(model)` reads its key from `OPENAI_API_KEY`. `deepseek(model)` reads `DEEPSEEK_API_KEY` and works with `deepseek-chat` and `deepseek-reasoner`.
+Each preset is a function that takes a model id. Hosted ones read their key from an environment variable; local ones send no key unless one is set.
 
-You can also build a provider from a string: `orko_providers::from_str("deepseek:deepseek-chat")?` returns a `BoxProvider`.
+| Function | Base URL | Key |
+|---|---|---|
+| `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| `deepseek` | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `GEMINI_API_KEY` |
+| `groq` | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` |
+| `together` | `https://api.together.xyz/v1` | `TOGETHER_API_KEY` |
+| `openrouter` | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` |
+| `moonshot` | `https://api.moonshot.ai/v1` | `MOONSHOT_API_KEY` |
+| `qwen` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | `DASHSCOPE_API_KEY` |
+| `mistral` | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` |
+| `xai` | `https://api.x.ai/v1` | `XAI_API_KEY` |
+| `perplexity` | `https://api.perplexity.ai` | `PERPLEXITY_API_KEY` |
+| `nvidia` | `https://integrate.api.nvidia.com/v1` | `NVIDIA_API_KEY` |
+| `zai` | `https://api.z.ai/api/paas/v4` | `ZAI_API_KEY` |
+| `huggingface` | `https://router.huggingface.co/v1` | `HF_TOKEN` |
+| `ollama` | `http://localhost:11434/v1` | none |
+| `vllm` | `http://localhost:8000/v1` | `VLLM_API_KEY` (optional) |
+| `llamacpp` | `http://localhost:8080/v1` | `LLAMACPP_API_KEY` (optional) |
+
+For any other endpoint, such as a server on another host, use `OpenAiCompatible::new(base_url, model)`.
+
+You can also build a provider from a string: `orko_providers::from_str("deepseek:deepseek-chat")?` returns a `BoxProvider`. The part before the first `:` is the function name, so `"ollama:llama3.2:3b"` works too.
 
 ## How it fits together
 
