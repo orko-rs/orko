@@ -27,8 +27,11 @@ thiserror = "2"
 async-trait = "0.1"
 tracing = "0.1"
 hyper = { version = "1", default-features = false, features = ["client", "http1"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
 hyper-util = { version = "0.1", default-features = false }
-hyper-rustls = { version = "0.27", default-features = false, features = ["native-tokio", "ring", "http1", "tls12"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["ring", "http1", "tls12"] }
+tower-service = "0.3"
 http = "1"
 http-body-util = "0.1"
 schemars = "0.8"

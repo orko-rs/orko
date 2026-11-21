@@ -24,3 +24,18 @@ graph = ["dep:orko-graph"]
 mcp = ["dep:orko-mcp"]
 runtime = ["dep:orko-runtime", "graph"]
 full = ["macros", "providers", "graph", "mcp", "runtime"]
+
+[dev-dependencies]
+futures.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+# Examples live at the workspace root; the facade owns them.
+[[example]]
+name = "hello_openai"
+path = "../../examples/hello_openai.rs"
+required-features = ["providers"]
+
+[[example]]
+name = "hello_deepseek"
+path = "../../examples/hello_deepseek.rs"
+required-features = ["providers"]

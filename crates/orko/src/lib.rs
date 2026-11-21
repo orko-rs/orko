@@ -6,20 +6,22 @@
 //!
 //! | Feature | Brings in | Default |
 //! |---|---|---|
-//! | `providers` | `orko::providers` (OpenAI-compatible engines, presets) | yes |
+//! | `providers` | `orko::providers` (OpenAI-compatible presets such as `openai`, `deepseek`, `ollama`, plus `from_str`) | yes |
 //! | `macros` | the `#[tool]` attribute macro | no |
 //! | `graph` | `orko::graph` (event graphs) | no |
 //! | `mcp` | `orko::mcp` (MCP client/server) | no |
 //! | `runtime` | `orko::runtime` (Tokio-backed execution; implies `graph`) | no |
 //! | `full` | all of the above | no |
 //!
-//! ## Building an agent:
+//! ## Building an agent
 //!
 //! ```no_run
-//! use orko::{create_agent, Provider};
+//! # #[cfg(feature = "providers")]
+//! # async fn demo() -> orko::Result<()> {
+//! use orko::{create_agent, providers::deepseek};
 //!
-//! # async fn demo(p: impl Provider) -> orko::Result<()> {
-//! let agent = create_agent(p)
+//! // Reads the key from DEEPSEEK_API_KEY.
+//! let agent = create_agent(deepseek("deepseek-chat"))
 //!     .with_system_prompt("You are an agent orchestrated with Orko.")
 //!     .build()?;
 //! let reply = agent.invoke("Hello!").await?;
@@ -27,6 +29,10 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! The built-in transport runs on Tokio. For another runtime, pass your own
+//! `Transport` to `OpenAiCompatible::with_transport`. To pick the provider at run time, use
+//! `orko::providers::from_str("openai:gpt-4o-mini")`.
 //!
 //! ## Stability
 //!
@@ -38,14 +44,13 @@
 
 pub use orko_core::*;
 
-// providers/graph/mcp/runtime are still empty placeholders
+// graph, mcp and runtime are still empty placeholders.
 
 #[cfg(feature = "macros")]
 pub use orko_macros::tool;
 
-/// Provider implementations: OpenAI-compatible engine and presets.
+/// OpenAI-compatible providers and their presets (`openai`, `deepseek`, `groq`, `ollama` and more).
 #[cfg(feature = "providers")]
-#[allow(unused_imports, unreachable_pub)]
 pub mod providers {
     pub use orko_providers::*;
 }

@@ -1,9 +1,46 @@
 [package]
 name = "orko-providers"
 version.workspace = true
-description.workspace = true
+description = "OpenAI-compatible provider engine and presets for orko"
 license.workspace = true
 repository.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["transport-tokio"]
+# The built-in HTTP transport: hyper 1.x with hyper-util and hyper-rustls on
+# Tokio. Without it you get the codec and engine, and you supply the transport.
+transport-tokio = [
+    "dep:tokio",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:hyper-rustls",
+    "dep:tower-service",
+    "dep:http",
+    "dep:http-body-util",
+    "dep:bytes",
+    "dep:rustls",
+    "dep:rustls-native-certs",
+]
 
 [dependencies]
+orko-core.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+eventsource-stream.workspace = true
+
+hyper = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+bytes = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-native-certs = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["net", "time"], optional = true }
+hyper-util = { workspace = true, features = ["client-legacy", "http1", "tokio"], optional = true }
+hyper-rustls = { workspace = true, optional = true }
+tower-service = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures = { workspace = true, features = ["executor"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
