@@ -21,15 +21,15 @@ async fn run() -> Result<()> {
 
 ## Development status
 
-| Crate                                     | Purpose                                                                            |     Status      | Notes                                                                                                                                    |
-| ----------------------------------------- | ---------------------------------------------------------------------------------- | :-------------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [`orko-core`](crates/orko-core)           | Core traits & types — `Provider`, `Agent`, `Tool`, `ModelRouter`, streaming chunks |    **alpha**    | API-frozen · 4 unit tests + 1 doctest passing · `clippy -D warnings` clean                                                               |
-| [`orko-macros`](crates/orko-macros)       | Proc macros (ergonomic tool definitions)                                           |   **review**    | `macro@tool` to turn `#[tool]` decorated functions into `Tool`                                                                           |
-| [`orko-providers`](crates/orko-providers) | Provider implementations (OpenAI-compatible HTTP + SSE, local inference)           |   **review**    | Codec/transport split, hyper + rustls `TokioTransport` (swappable) · 17 OpenAI-compatible presets, `from_str("provider:model")` · 15 tests |
-| [`orko-graph`](crates/orko-graph)         | Graph-based multi-agent workflows                                                  |  🩻 Scaffolded  | Empty stub                                                                                                                               |
-| [`orko-runtime`](crates/orko-runtime)     | Tokio runtime integration & task spawning                                          |  🩻 Scaffolded  | Empty stub — the _only_ crate allowed to touch tokio                                                                                     |
-| [`orko-mcp`](crates/orko-mcp)             | Model Context Protocol integration                                                 |  🩻 Scaffolded  | Empty stub                                                                                                                               |
-| `orko` (facade)                           | Single-dependency entry point re-exporting the workspace                           | **development** | Created last, once the pieces exist                                                                                                      |
+| Crate                                     | Purpose                                                                            |     Status      | Notes                                                                                                                                      |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | :-------------: | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`orko-core`](crates/orko-core)           | Core traits & types — `Provider`, `Agent`, `Tool`, `ModelRouter`, streaming chunks |    **alpha**    | API-frozen · 4 unit tests + 1 doctest passing · `clippy -D warnings` clean                                                                 |
+| [`orko-macros`](crates/orko-macros)       | Proc macros (ergonomic tool definitions)                                           |    **alpha**    | `macro@tool` to turn `#[tool]` decorated functions into `Tool`                                                                             |
+| [`orko-providers`](crates/orko-providers) | Provider implementations (OpenAI-compatible HTTP + SSE, local inference)           |    **alpha**    | Codec/transport split, hyper + rustls `TokioTransport` (swappable) · 17 OpenAI-compatible presets, `from_str("provider:model")` · 15 tests |
+| [`orko-graph`](crates/orko-graph)         | Graph-based multi-agent workflows                                                  |  🩻 Scaffolded  | Empty stub                                                                                                                                 |
+| [`orko-runtime`](crates/orko-runtime)     | Tokio runtime integration & task spawning                                          |  🩻 Scaffolded  | Empty stub — the _only_ crate allowed to touch tokio                                                                                       |
+| [`orko-mcp`](crates/orko-mcp)             | Model Context Protocol integration                                                 |  🩻 Scaffolded  | Empty stub                                                                                                                                 |
+| `orko` (facade)                           | Single-dependency entry point re-exporting the workspace                           | **development** | Created last, once the pieces exist                                                                                                        |
 
 ### Providers status
 
@@ -39,29 +39,29 @@ The OpenAI-compatible engine
 ([#3](https://github.com/orko-rs/orko/issues/3)) is the base, everything marked _preset_ is a thin configuration over it,
 while _codec_ rows implement a new wire format sharing the same transport.
 
-| Provider     | Kind                     | Env key                |                  Tracking issue                  |   Status    |
-| ------------ | ------------------------ | ---------------------- | :----------------------------------------------: | :---------: |
-| OpenAI       | engine + preset          | `OPENAI_API_KEY`       |  [#3](https://github.com/orko-rs/orko/issues/3)  | **review**  |
-| Anthropic    | native codec             | `ANTHROPIC_API_KEY`    |  [#6](https://github.com/orko-rs/orko/issues/6)  | **planned** |
-| Azure OpenAI | codec variant            | `AZURE_OPENAI_API_KEY` | [#22](https://github.com/orko-rs/orko/issues/22) | **planned** |
-| AWS Bedrock  | native codec + SigV4     | AWS credential chain   | [#23](https://github.com/orko-rs/orko/issues/23) | **planned** |
-| Google       | preset (compat endpoint) | `GEMINI_API_KEY`       |  [#4](https://github.com/orko-rs/orko/issues/4)  | **review**  |
-| DeepSeek     | preset                   | `DEEPSEEK_API_KEY`     |  [#5](https://github.com/orko-rs/orko/issues/5)  | **review**  |
-| Groq         | preset                   | `GROQ_API_KEY`         |  [#7](https://github.com/orko-rs/orko/issues/7)  | **review**  |
-| Together     | preset                   | `TOGETHER_API_KEY`     |  [#8](https://github.com/orko-rs/orko/issues/8)  | **review**  |
-| OpenRouter   | preset                   | `OPENROUTER_API_KEY`   |  [#9](https://github.com/orko-rs/orko/issues/9)  | **review**  |
-| Moonshot     | preset                   | `MOONSHOT_API_KEY`     | [#10](https://github.com/orko-rs/orko/issues/10) | **review**  |
-| Qwen         | preset                   | `DASHSCOPE_API_KEY`    | [#11](https://github.com/orko-rs/orko/issues/11) | **review**  |
-| Mistral      | preset                   | `MISTRAL_API_KEY`      | [#16](https://github.com/orko-rs/orko/issues/16) | **review**  |
-| xAI          | preset                   | `XAI_API_KEY`          | [#17](https://github.com/orko-rs/orko/issues/17) | **review**  |
-| Perplexity   | preset                   | `PERPLEXITY_API_KEY`   | [#18](https://github.com/orko-rs/orko/issues/18) | **review**  |
-| NVIDIA NIM   | preset                   | `NVIDIA_API_KEY`¹      | [#19](https://github.com/orko-rs/orko/issues/19) | **review**  |
-| Z.ai (GLM)   | preset                   | `ZAI_API_KEY`          | [#20](https://github.com/orko-rs/orko/issues/20) | **review**  |
-| HF router    | preset                   | `HF_TOKEN`             | [#21](https://github.com/orko-rs/orko/issues/21) | **review**  |
-| Ollama       | preset (local, no auth)  | —                      | [#12](https://github.com/orko-rs/orko/issues/12) | **review**  |
-| vLLM         | preset (local)           | `VLLM_API_KEY`¹        | [#13](https://github.com/orko-rs/orko/issues/13) | **review**  |
-| llama.cpp    | preset (local)           | `LLAMACPP_API_KEY`¹    | [#14](https://github.com/orko-rs/orko/issues/14) | **review**  |
-| Candle       | in-process (no HTTP)     | `HF_TOKEN`¹            | [#15](https://github.com/orko-rs/orko/issues/15) | **planned** |
+| Provider     | Kind                    | Env key                |                  Tracking issue                  |   Status    |
+| ------------ | ----------------------- | ---------------------- | :----------------------------------------------: | :---------: |
+| OpenAI       | engine + preset         | `OPENAI_API_KEY`       |  [#3](https://github.com/orko-rs/orko/issues/3)  |  **alpha**  |
+| Anthropic    | native codec            | `ANTHROPIC_API_KEY`    |  [#6](https://github.com/orko-rs/orko/issues/6)  | **planned** |
+| Azure OpenAI | codec variant           | `AZURE_OPENAI_API_KEY` | [#22](https://github.com/orko-rs/orko/issues/22) | **planned** |
+| AWS Bedrock  | native codec + SigV4    | AWS credential chain   | [#23](https://github.com/orko-rs/orko/issues/23) | **planned** |
+| Google       | preset                  | `GEMINI_API_KEY`       |  [#4](https://github.com/orko-rs/orko/issues/4)  |  **alpha**  |
+| DeepSeek     | preset                  | `DEEPSEEK_API_KEY`     |  [#5](https://github.com/orko-rs/orko/issues/5)  |  **alpha**  |
+| Groq         | preset                  | `GROQ_API_KEY`         |  [#7](https://github.com/orko-rs/orko/issues/7)  |  **alpha**  |
+| Together     | preset                  | `TOGETHER_API_KEY`     |  [#8](https://github.com/orko-rs/orko/issues/8)  |  **alpha**  |
+| OpenRouter   | preset                  | `OPENROUTER_API_KEY`   |  [#9](https://github.com/orko-rs/orko/issues/9)  |  **alpha**  |
+| Moonshot     | preset                  | `MOONSHOT_API_KEY`     | [#10](https://github.com/orko-rs/orko/issues/10) |  **alpha**  |
+| Qwen         | preset                  | `DASHSCOPE_API_KEY`    | [#11](https://github.com/orko-rs/orko/issues/11) |  **alpha**  |
+| Mistral      | preset                  | `MISTRAL_API_KEY`      | [#16](https://github.com/orko-rs/orko/issues/16) |  **alpha**  |
+| xAI          | preset                  | `XAI_API_KEY`          | [#17](https://github.com/orko-rs/orko/issues/17) |  **alpha**  |
+| Perplexity   | preset                  | `PERPLEXITY_API_KEY`   | [#18](https://github.com/orko-rs/orko/issues/18) |  **alpha**  |
+| NVIDIA NIM   | preset                  | `NVIDIA_API_KEY`¹      | [#19](https://github.com/orko-rs/orko/issues/19) |  **alpha**  |
+| Z.ai (GLM)   | preset                  | `ZAI_API_KEY`          | [#20](https://github.com/orko-rs/orko/issues/20) |  **alpha**  |
+| HF router    | preset                  | `HF_TOKEN`             | [#21](https://github.com/orko-rs/orko/issues/21) |  **alpha**  |
+| Ollama       | preset (local, no auth) | —                      | [#12](https://github.com/orko-rs/orko/issues/12) |  **alpha**  |
+| vLLM         | preset (local)          | `VLLM_API_KEY`¹        | [#13](https://github.com/orko-rs/orko/issues/13) |  **alpha**  |
+| llama.cpp    | preset (local)          | `LLAMACPP_API_KEY`¹    | [#14](https://github.com/orko-rs/orko/issues/14) |  **alpha**  |
+| Candle       | in-process (no HTTP)    | `HF_TOKEN`¹            | [#15](https://github.com/orko-rs/orko/issues/15) | **planned** |
 
 ¹ optional: only sent when the server enforces auth (Candle: only for gated Hub repos).
 
