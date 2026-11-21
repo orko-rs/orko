@@ -33,49 +33,49 @@ pub trait Transport: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<HttpResponse>> + Send + 'a>>;
 }
 
-#[cfg(feature = "transport-hyper")]
-pub use hyper_impl::HyperTransport;
+#[cfg(feature = "transport-tokio")]
+pub use tokio_impl::TokioTransport;
 
-#[cfg(feature = "transport-hyper")]
-mod hyper_impl {
+/// [`TokioTransport`]: hyper with hyper-util and hyper-rustls, on Tokio's IO.
+#[cfg(feature = "transport-tokio")]
+mod tokio_impl {
     use super::{HttpResponse, Transport};
-    use async_net::TcpStream;
     use bytes::Bytes;
     use futures::future::{self, Either};
-    use futures::io::{AsyncRead, AsyncWrite};
-    use futures::{ready, Stream};
-    use futures_rustls::TlsConnector;
+    use futures::Stream;
     use http_body_util::Full;
     use hyper::body::{Body, Incoming};
+    use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+    use hyper_util::client::legacy::connect::HttpConnector;
     use orko_core::{Error, Result};
-    use rustls::pki_types::ServerName;
     use std::future::Future;
-    use std::io;
-    use std::pin::Pin;
-    use std::sync::Arc;
+    use std::pin::{pin, Pin};
     use std::task::{Context, Poll};
     use std::time::Duration;
+    use tower_service::Service;
 
-    fn err(e: impl std::fmt::Display) -> Error {
-        Error::Provider(format!("transport: {e}"))
-    }
-
-    /// The default transport: hyper 1.x HTTP/1.1 over `async-net` TCP, with
-    /// rustls and the platform's root certificates for HTTPS.
+    /// The built-in transport: hyper 1.x HTTP/1.1 on Tokio's IO, with
+    /// hyper-rustls and the platform's root certificates for HTTPS.
     ///
-    /// It works under any executor (Tokio, smol, `futures::executor::block_on`)
-    /// because `async-net` runs its own reactor. It spawns no tasks; reading
-    /// the response body is what moves the connection forward.
+    /// It must be polled inside a Tokio runtime with IO and time enabled. It
+    /// spawns no tasks; reading the response body is what moves the connection
+    /// forward. hyper-util's connector races IPv4 and IPv6 (happy eyeballs), so
+    /// a dead IPv6 route doesn't hang the request.
     ///
-    /// Requests time out after [`HyperTransport::DEFAULT_TIMEOUT`]. Use
-    /// [`HyperTransport::with_timeout`] to change it.
+    /// Other runtimes don't need it: implement [`Transport`] for your own client
+    /// and pass it to [`OpenAiCompatible::with_transport`](crate::OpenAiCompatible::with_transport).
+    ///
+    /// Requests time out after [`TokioTransport::DEFAULT_TIMEOUT`]. Use
+    /// [`TokioTransport::with_timeout`] to change it.
+    // INFO: opens a new connection for every request. If handshake latency
+    // matters, pass a `Transport` that pools connections.
     #[derive(Clone)]
-    pub struct HyperTransport {
-        tls: TlsConnector,
+    pub struct TokioTransport {
+        connector: HttpsConnector<HttpConnector>,
         timeout: Duration,
     }
 
-    impl HyperTransport {
+    impl TokioTransport {
         /// The default request timeout, 60 seconds.
         pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -83,30 +83,25 @@ mod hyper_impl {
         ///
         /// # Errors
         ///
-        /// [`Error::Config`] if the platform has no root certificates we can load.
+        /// [`orko_core::Error::Config`] if the platform has no root certificates
+        /// we can load.
         pub fn new() -> Result<Self> {
-            let mut roots = rustls::RootCertStore::empty();
-            let (added, _) =
-                roots.add_parsable_certificates(rustls_native_certs::load_native_certs().certs);
-            if added == 0 {
-                return Err(Error::Config(
-                    "no native TLS root certificates found".into(),
-                ));
-            }
-            let provider = Arc::new(rustls::crypto::ring::default_provider());
-            let config = rustls::ClientConfig::builder_with_provider(provider)
-                .with_safe_default_protocol_versions()
-                .map_err(|e| Error::Config(format!("TLS config: {e}")))?
-                .with_root_certificates(roots)
-                .with_no_client_auth();
+            let connector = HttpsConnectorBuilder::new()
+                .with_tls_config(tls_config()?)
+                .https_or_http()
+                .enable_http1()
+                .build();
             Ok(Self {
-                tls: TlsConnector::from(Arc::new(config)),
+                connector,
                 timeout: Self::DEFAULT_TIMEOUT,
             })
         }
 
-        /// Sets the request timeout. It covers connecting, the TLS handshake
-        /// and waiting for the response head. A long streamed body is not cut off.
+        /// Sets the request timeout. It covers connecting, the TLS handshake and
+        /// waiting for the response head. A long streamed body is not cut off.
+        // INFO: there is no timeout between body chunks, so a server that
+        // stops partway through a stream still hangs. Add one in `Driven` if that
+        // happens in practice.
         pub fn with_timeout(mut self, timeout: Duration) -> Self {
             self.timeout = timeout;
             self
@@ -119,71 +114,83 @@ mod hyper_impl {
             body: Vec<u8>,
         ) -> Result<HttpResponse> {
             let uri: http::Uri = url.parse().map_err(err)?;
-            let https = match uri.scheme_str() {
-                Some("https") => true,
-                Some("http") => false,
-                _ => return Err(err("url scheme must be http or https")),
-            };
-            let authority = uri.authority().ok_or_else(|| err("url has no host"))?;
-            let host = authority.host().trim_matches(|c| c == '[' || c == ']');
-            let port = authority.port_u16().unwrap_or(if https { 443 } else { 80 });
-            let path = uri.path_and_query().map_or("/", |p| p.as_str());
-
-            let addrs = async_net::resolve((host, port)).await.map_err(err)?;
-            if addrs.is_empty() {
-                return Err(err(format_args!("`{host}` resolved to no addresses")));
-            }
-            // ponytail: connects to every address at once and keeps the first
-            // that answers, so a dead IPv6 route doesn't hang the request.
-            // RFC 8305 staggers the attempts; do that if the extra
-            // connections ever become a problem.
-            let attempts = addrs.into_iter().map(|a| Box::pin(TcpStream::connect(a)));
-            let (tcp, _) = future::select_ok(attempts).await.map_err(err)?;
-            if https {
-                let name = ServerName::try_from(host.to_owned()).map_err(err)?;
-                let tls = self.tls.connect(name, tcp).await.map_err(err)?;
-                exchange(Io(tls), authority.as_str(), path, headers, body).await
-            } else {
-                exchange(Io(tcp), authority.as_str(), path, headers, body).await
-            }
+            let io = self
+                .connector
+                .clone()
+                .call(uri.clone())
+                .await
+                .map_err(err)?;
+            exchange(io, &uri, headers, body).await
         }
     }
 
-    impl Transport for HyperTransport {
+    impl Transport for TokioTransport {
         fn post<'a>(
             &'a self,
             url: &'a str,
             headers: &'a [(String, String)],
             body: Vec<u8>,
         ) -> Pin<Box<dyn Future<Output = Result<HttpResponse>> + Send + 'a>> {
-            Box::pin(async move {
-                let send = std::pin::pin!(self.send(url, headers, body));
-                match future::select(send, async_io::Timer::after(self.timeout)).await {
-                    Either::Left((resp, _)) => resp,
-                    Either::Right(_) => Err(err(format_args!(
-                        "request timed out after {:?}",
-                        self.timeout
-                    ))),
-                }
-            })
+            Box::pin(with_timeout(
+                self.send(url, headers, body),
+                tokio::time::sleep(self.timeout),
+                self.timeout,
+            ))
         }
     }
 
+    fn err(e: impl std::fmt::Display) -> Error {
+        Error::Provider(format!("transport: {e}"))
+    }
+
+    /// A rustls client config with the ring provider and the platform's root
+    /// certificates.
+    fn tls_config() -> Result<rustls::ClientConfig> {
+        let mut roots = rustls::RootCertStore::empty();
+        let (added, _) =
+            roots.add_parsable_certificates(rustls_native_certs::load_native_certs().certs);
+        if added == 0 {
+            return Err(Error::Config(
+                "no native TLS root certificates found".into(),
+            ));
+        }
+        let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+        Ok(rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|e| Error::Config(format!("TLS config: {e}")))?
+            .with_root_certificates(roots)
+            .with_no_client_auth())
+    }
+
+    /// Runs `request`, failing if `sleep` finishes first.
+    async fn with_timeout(
+        request: impl Future<Output = Result<HttpResponse>>,
+        sleep: impl Future,
+        timeout: Duration,
+    ) -> Result<HttpResponse> {
+        match future::select(pin!(request), pin!(sleep)).await {
+            Either::Left((resp, _)) => resp,
+            Either::Right(_) => Err(err(format_args!("request timed out after {timeout:?}"))),
+        }
+    }
+
+    /// Sends one POST over an open connection and returns the streaming response.
     async fn exchange<T>(
         io: T,
-        host: &str,
-        path: &str,
+        uri: &http::Uri,
         headers: &[(String, String)],
         body: Vec<u8>,
     ) -> Result<HttpResponse>
     where
         T: hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static,
     {
+        let host = uri.authority().ok_or_else(|| err("url has no host"))?;
+        let path = uri.path_and_query().map_or("/", |p| p.as_str());
         let (mut sender, conn) = hyper::client::conn::http1::handshake(io)
             .await
             .map_err(err)?;
 
-        let mut req = http::Request::post(path).header(http::header::HOST, host);
+        let mut req = http::Request::post(path).header(http::header::HOST, host.as_str());
         for (k, v) in headers {
             req = req.header(k.as_str(), v.as_str());
         }
@@ -191,7 +198,7 @@ mod hyper_impl {
 
         // Poll the connection and the request together instead of spawning a task.
         let mut conn = Box::pin(conn);
-        let send = std::pin::pin!(sender.send_request(req));
+        let send = pin!(sender.send_request(req));
         let (resp, conn) = match future::select(send, conn.as_mut()).await {
             Either::Left((resp, _)) => (resp.map_err(err)?, Some(conn)),
             Either::Right((done, send)) => {
@@ -212,50 +219,13 @@ mod hyper_impl {
         })
     }
 
-    /// Wraps a `futures::io` stream so hyper can read and write it.
-    struct Io<T>(T);
-
-    impl<T: AsyncRead + Unpin> hyper::rt::Read for Io<T> {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            mut buf: hyper::rt::ReadBufCursor<'_>,
-        ) -> Poll<io::Result<()>> {
-            // ponytail: reads into a stack buffer and copies it over, because
-            // writing into hyper's buffer directly needs unsafe. The copy is
-            // cheap compared with the network read.
-            let mut tmp = [0u8; 8192];
-            let len = buf.remaining().min(tmp.len());
-            let n = ready!(Pin::new(&mut self.0).poll_read(cx, &mut tmp[..len]))?;
-            buf.put_slice(&tmp[..n]);
-            Poll::Ready(Ok(()))
-        }
-    }
-
-    impl<T: AsyncWrite + Unpin> hyper::rt::Write for Io<T> {
-        fn poll_write(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<io::Result<usize>> {
-            Pin::new(&mut self.0).poll_write(cx, buf)
-        }
-
-        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_flush(cx)
-        }
-
-        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Pin::new(&mut self.0).poll_close(cx)
-        }
-    }
-
-    /// The response body. Each read also polls the connection, so the
-    /// socket keeps working without a spawned task.
+    /// The response body. Each read also polls the connection, so the socket
+    /// keeps working without a spawned task.
     struct Driven<C> {
         conn: Option<Pin<Box<C>>>,
         body: Incoming,
     }
+
     impl<C: Future<Output = hyper::Result<()>>> Stream for Driven<C> {
         type Item = Result<Vec<u8>>;
 

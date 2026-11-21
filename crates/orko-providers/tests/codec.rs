@@ -338,18 +338,16 @@ fn chunk_boundaries_never_change_the_text() {
     }
 }
 
-#[cfg(feature = "transport-hyper")]
-mod hyper_transport {
-    use futures::executor::block_on;
+#[cfg(feature = "transport-tokio")]
+mod tokio_transport {
     use futures::StreamExt;
-    use orko_providers::{HyperTransport, Transport};
+    use orko_providers::{TokioTransport, Transport};
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::time::Duration;
 
-    /// A real HTTP request and response, with no async runtime.
-    #[test]
-    fn plain_http_round_trip_under_block_on() {
+    #[tokio::test]
+    async fn plain_http_round_trip_on_tokio() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         std::thread::spawn(move || {
@@ -364,16 +362,16 @@ mod hyper_transport {
             )
             .unwrap();
         });
-        let t = HyperTransport::new().unwrap();
+        let t = TokioTransport::new().unwrap();
         let url = format!("http://{addr}/chat/completions");
-        let resp = block_on(t.post(&url, &[], b"{}".to_vec())).unwrap();
+        let resp = t.post(&url, &[], b"{}".to_vec()).await.unwrap();
         assert_eq!(resp.status, 200);
-        let body: Vec<u8> = block_on(resp.body.map(|b| b.unwrap()).concat());
+        let body: Vec<u8> = resp.body.map(|b| b.unwrap()).concat().await;
         assert_eq!(body, b"data: [DONE]\n\n");
     }
 
-    #[test]
-    fn silent_server_times_out() {
+    #[tokio::test]
+    async fn silent_server_times_out_on_tokio() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let _hold = std::thread::spawn(move || {
@@ -382,11 +380,14 @@ mod hyper_transport {
                 drop(s);
             })
         });
-        let t = HyperTransport::new()
+        let t = TokioTransport::new()
             .unwrap()
             .with_timeout(Duration::from_millis(200));
-        let url = format!("http://{addr}/");
-        let err = block_on(t.post(&url, &[], Vec::new())).err().unwrap();
+        let err = t
+            .post(&format!("http://{addr}/"), &[], Vec::new())
+            .await
+            .err()
+            .unwrap();
         assert!(err.to_string().contains("timed out"), "{err}");
     }
 }

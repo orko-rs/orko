@@ -30,8 +30,8 @@
 //! # }
 //! ```
 //!
-//! Any executor can drive it, including `futures::executor::block_on`.
-//! To pick the provider at run time, use
+//! The built-in transport runs on Tokio. For another runtime, pass your own
+//! `Transport` to `OpenAiCompatible::with_transport`. To pick the provider at run time, use
 //! `orko::providers::from_str("openai:gpt-4o-mini")`.
 //!
 //! ## Stability

@@ -19,19 +19,19 @@ The crate has three parts. `orko_providers::codec` builds the request JSON and p
 
 | Feature | Default | What it adds |
 |---|---|---|
-| `transport-hyper` | yes | `HyperTransport`, which runs hyper 1.x HTTP/1.1 over `async-net` TCP, with rustls and the platform's root certificates. It works under Tokio, smol or `futures::executor::block_on` and spawns no tasks. Requests time out after 60 s by default; change it with `with_timeout`. |
+| `transport-tokio` | yes | `TokioTransport`, which runs hyper 1.x HTTP/1.1 on Tokio through hyper-util and hyper-rustls, with the platform's root certificates. It has to run inside a Tokio runtime and spawns no tasks. Requests time out after 60 s by default; change it with `with_timeout`. |
 
 With `--no-default-features` you get the codec and `OpenAiCompatible`, and you supply the transport.
 
 ## Using your own HTTP client
 
-To add a proxy, custom TLS or connection pooling, or to use a different runtime's networking, implement `Transport` and pass it to `OpenAiCompatible::with_transport`. Request building and parsing work the same way.
+To use another runtime, or to add a proxy, custom TLS or connection pooling, implement `Transport` and pass it to `OpenAiCompatible::with_transport`. Request building and parsing work the same way.
 
 If you need more control than that, implement `orko_core::Provider` yourself with any HTTP client. The rest of orko doesn't depend on this crate.
 
 ## Known limits
 
-- `HyperTransport` opens a new connection for every request.
+- `TokioTransport` opens a new connection for every request.
 - The timeout covers connecting, TLS and waiting for the response head. A stream that stops partway through can still hang.
 - Tool results go out as `user` messages, because `orko-core` doesn't carry a `tool_call_id` yet.
 - Files have to be inline base64, since Chat Completions doesn't accept file URLs.

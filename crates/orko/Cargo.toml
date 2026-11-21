@@ -26,7 +26,8 @@ runtime = ["dep:orko-runtime", "graph"]
 full = ["macros", "providers", "graph", "mcp", "runtime"]
 
 [dev-dependencies]
-futures = { workspace = true, features = ["executor"] }
+futures.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 # Examples live at the workspace root; the facade owns them.
 [[example]]

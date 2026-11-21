@@ -6,6 +6,8 @@ use futures::StreamExt;
 use orko_core::{CompletionRequest, CompletionStream, Error, Provider, Result};
 use std::future::Future;
 use std::sync::Arc;
+#[cfg(feature = "transport-tokio")]
+use std::sync::OnceLock;
 
 /// Ways an OpenAI-compatible API differs from OpenAI's own.
 ///
@@ -126,7 +128,7 @@ impl OpenAiCompatible {
         let transport = self.transport()?;
         let resp = transport.post(&url, &headers, body).await?;
         if !(200..300).contains(&resp.status) {
-            // ponytail: error bodies are short JSON, so 8 KiB is plenty.
+            // INFO: error bodies are short JSON, so 8 KiB is plenty.
             let mut text = Vec::new();
             let mut body = resp.body;
             while let Some(part) = body.next().await {
@@ -154,20 +156,19 @@ impl Provider for OpenAiCompatible {
     }
 }
 
-#[cfg(feature = "transport-hyper")]
+#[cfg(feature = "transport-tokio")]
 fn default_transport() -> Result<Arc<dyn Transport>> {
-    use std::sync::OnceLock;
     static DEFAULT: OnceLock<Arc<dyn Transport>> = OnceLock::new();
     if let Some(t) = DEFAULT.get() {
         return Ok(t.clone());
     }
-    let t: Arc<dyn Transport> = Arc::new(crate::transport::HyperTransport::new()?);
+    let t: Arc<dyn Transport> = Arc::new(crate::TokioTransport::new()?);
     Ok(DEFAULT.get_or_init(|| t).clone())
 }
 
-#[cfg(not(feature = "transport-hyper"))]
+#[cfg(not(feature = "transport-tokio"))]
 fn default_transport() -> Result<Arc<dyn Transport>> {
     Err(Error::Config(
-        "no transport: enable the `transport-hyper` feature or call `with_transport`".into(),
+        "no transport: enable the `transport-tokio` feature or call `with_transport`".into(),
     ))
 }

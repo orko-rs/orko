@@ -4,10 +4,9 @@
 //! [orko](https://github.com/orko-rs/orko).
 //!
 //! - [`codec`] builds requests and parses the SSE stream. It does no IO.
-//! - [`transport`] has the [`Transport`] trait for sending HTTP. The default,
-//!   [`HyperTransport`], uses hyper and rustls and works under any async
-//!   runtime. It is behind the `transport-hyper` feature, which is on by
-//!   default.
+//! - [`transport`] has the [`Transport`] trait for sending HTTP. The built-in
+//!   [`TokioTransport`] runs hyper on Tokio, behind the `transport-tokio`
+//!   feature, which is on by default.
 //! - [`OpenAiCompatible`] puts the two together and implements
 //!   [`orko_core::Provider`]. Presets such as [`openai`] set it up for one
 //!   provider.
@@ -20,7 +19,7 @@
 //! # }
 //! ```
 //!
-//! If the default transport doesn't fit, pass your own [`Transport`] to
+//! For another runtime, or if the built-in transport doesn't fit, pass your own [`Transport`] to
 //! [`OpenAiCompatible::with_transport`], or implement [`orko_core::Provider`]
 //! yourself with any HTTP client.
 
@@ -41,8 +40,8 @@ mod providers {
 pub use engine::{OpenAiCompatible, Quirks};
 pub use providers::deepseek::{deepseek, DEEPSEEK_BASE_URL};
 pub use providers::openai::{openai, OPENAI_BASE_URL};
-#[cfg(feature = "transport-hyper")]
-pub use transport::HyperTransport;
+#[cfg(feature = "transport-tokio")]
+pub use transport::TokioTransport;
 pub use transport::{ByteStream, HttpResponse, Transport};
 
 use orko_core::{boxed, BoxProvider, Error, Result};

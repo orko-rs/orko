@@ -10,12 +10,8 @@ use orko::providers::openai;
 use orko::{create_agent, Result};
 use std::sync::Arc;
 
-// Any executor works. `block_on` is the simplest.
-fn main() -> Result<()> {
-    futures::executor::block_on(run())
-}
-
-async fn run() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let mut provider = openai("gpt-4o-mini");
     if std::env::var_os("OPENAI_API_KEY").is_none_or(|v| v.is_empty()) {
         eprintln!("OPENAI_API_KEY not set; using the offline stub transport");

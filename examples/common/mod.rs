@@ -6,7 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 /// Returns a fixed SSE response with the text `"Hello from "` followed by `.0`.
-// ponytail: `.0` goes into the JSON unescaped, so don't put quotes in it.
+// INFO: `.0` goes into the JSON unescaped, so don't put quotes in it.
 pub struct Canned(pub &'static str);
 
 impl Transport for Canned {

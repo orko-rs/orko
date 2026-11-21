@@ -25,7 +25,7 @@ async fn run() -> Result<()> {
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | :-------------: | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | [`orko-core`](crates/orko-core)           | Core traits & types — `Provider`, `Agent`, `Tool`, `ModelRouter`, streaming chunks |    **alpha**    | API-frozen · 4 unit tests + 1 doctest passing · `clippy -D warnings` clean                                                               |
 | [`orko-macros`](crates/orko-macros)       | Proc macros (ergonomic tool definitions)                                           |   **review**    | `macro@tool` to turn `#[tool]` decorated functions into `Tool`                                                                           |
-| [`orko-providers`](crates/orko-providers) | Provider implementations (OpenAI-compatible HTTP + SSE, local inference)           |   **review**    | Codec/transport split, runtime-agnostic hyper + rustls transport · `openai`, `deepseek` presets, `from_str("provider:model")` · 14 tests |
+| [`orko-providers`](crates/orko-providers) | Provider implementations (OpenAI-compatible HTTP + SSE, local inference)           |   **review**    | Codec/transport split, hyper + rustls `TokioTransport` (swappable) · `openai`, `deepseek` presets, `from_str("provider:model")` · 14 tests |
 | [`orko-graph`](crates/orko-graph)         | Graph-based multi-agent workflows                                                  |  🩻 Scaffolded  | Empty stub                                                                                                                               |
 | [`orko-runtime`](crates/orko-runtime)     | Tokio runtime integration & task spawning                                          |  🩻 Scaffolded  | Empty stub — the _only_ crate allowed to touch tokio                                                                                     |
 | [`orko-mcp`](crates/orko-mcp)             | Model Context Protocol integration                                                 |  🩻 Scaffolded  | Empty stub                                                                                                                               |
@@ -103,8 +103,9 @@ The rules that keep it honest:
 1. **Dependencies flow down:** every crate depends only on `orko-core`
    (exception: `orko-runtime` may also depend on `orko-graph`).
 2. **No tokio in public APIs:** public traits use `std::future::Future` and
-   `futures::Stream` only; tokio lives exclusively inside `orko-runtime`.
-   The default HTTP transport (hyper over `async-net`) works under any executor.
+   `futures::Stream` only. Tokio appears only in `orko-runtime` and in the
+   built-in HTTP transport of `orko-providers` (`transport-tokio`, swappable
+   through the `Transport` trait).
 3. **`orko-core` stays lean:** exactly four dependencies (`serde`,
    `serde_json`, `thiserror`, `futures`), no HTTP, no runtime, `#![forbid(unsafe_code)]`.
 

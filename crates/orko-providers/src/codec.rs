@@ -163,7 +163,7 @@ pub fn parse_event(data: &str) -> Result<Option<CompletionChunk>> {
     }
 
     let mut chunk = CompletionChunk::default();
-    // ponytail: reads only the first choice, since we never ask for `n > 1`.
+    // INFO: reads only the first choice, since we never ask for `n > 1`.
     if let Some(choice) = v.pointer("/choices/0") {
         if let Some(delta) = choice.get("delta") {
             let s = |k: &str| delta.get(k).and_then(Value::as_str).map(str::to_owned);
