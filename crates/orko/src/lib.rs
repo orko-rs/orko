@@ -8,10 +8,10 @@
 //! |---|---|---|
 //! | `providers` | `orko::providers` (OpenAI-compatible presets such as `openai`, `deepseek`, `ollama`, plus `from_str`) | yes |
 //! | `macros` | the `#[tool]` attribute macro | no |
-//! | `graph` | `orko::graph` (event graphs) | no |
-//! | `mcp` | `orko::mcp` (MCP client/server) | no |
-//! | `runtime` | `orko::runtime` (Tokio-backed execution; implies `graph`) | no |
 //! | `full` | all of the above | no |
+//!
+//! Event graphs, MCP and the runtime are planned. Their features will come
+//! back once those crates have code.
 //!
 //! ## Building an agent
 //!
@@ -44,8 +44,6 @@
 
 pub use orko_core::*;
 
-// graph, mcp and runtime are still empty placeholders.
-
 #[cfg(feature = "macros")]
 pub use orko_macros::tool;
 
@@ -53,25 +51,4 @@ pub use orko_macros::tool;
 #[cfg(feature = "providers")]
 pub mod providers {
     pub use orko_providers::*;
-}
-
-/// Event-graph building blocks.
-#[cfg(feature = "graph")]
-#[allow(unused_imports, unreachable_pub)]
-pub mod graph {
-    pub use orko_graph::*;
-}
-
-/// Model Context Protocol client and server.
-#[cfg(feature = "mcp")]
-#[allow(unused_imports, unreachable_pub)]
-pub mod mcp {
-    pub use orko_mcp::*;
-}
-
-/// Tokio-backed execution: supervision, graph running, checkpointing.
-#[cfg(feature = "runtime")]
-#[allow(unused_imports, unreachable_pub)]
-pub mod runtime {
-    pub use orko_runtime::*;
 }

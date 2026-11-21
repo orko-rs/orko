@@ -325,11 +325,8 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "orko-core",
- "orko-graph",
  "orko-macros",
- "orko-mcp",
  "orko-providers",
- "orko-runtime",
  "tokio",
 ]
 

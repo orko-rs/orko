@@ -11,19 +11,14 @@ rust-version.workspace = true
 orko-core.workspace = true
 orko-macros = { workspace = true, optional = true }
 orko-providers = { workspace = true, optional = true }
-orko-graph = { workspace = true, optional = true }
-orko-mcp = { workspace = true, optional = true }
-orko-runtime = { workspace = true, optional = true }
 
 [features]
 default = ["providers"]
 core = []
 macros = ["dep:orko-macros"]
 providers = ["dep:orko-providers"]
-graph = ["dep:orko-graph"]
-mcp = ["dep:orko-mcp"]
-runtime = ["dep:orko-runtime", "graph"]
-full = ["macros", "providers", "graph", "mcp", "runtime"]
+# graph, mcp and runtime come back once those crates have code.
+full = ["macros", "providers"]
 
 [dev-dependencies]
 futures.workspace = true
