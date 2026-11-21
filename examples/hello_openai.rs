@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     let mut provider = openai("gpt-4o-mini");
     if std::env::var_os("OPENAI_API_KEY").is_none_or(|v| v.is_empty()) {
         eprintln!("OPENAI_API_KEY not set; using the offline stub transport");
-        provider = provider.with_transport(Arc::new(Canned("the offline stub!")));
+        provider = provider.with_transport(Arc::new(Canned("the offline OpenAI stub!")));
     }
     let agent = create_agent(provider)
         .with_system_prompt("You are a helpful assistant. Be brief.")
