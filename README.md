@@ -9,6 +9,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.82%2B-orange.svg)](Cargo.toml)
 [![Status](https://img.shields.io/badge/status-early%20development-yellow.svg)](#development-status)
+[![SourceForge](https://img.shields.io/badge/SourceForge-orko-orange.svg?logo=sourceforge)](https://sourceforge.net/projects/orko/)
 
 ```rust
 use orko::{create_agent, providers::openai, Result};
