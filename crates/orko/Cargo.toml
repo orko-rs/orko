@@ -18,20 +18,14 @@ default = ["providers"]
 core = []
 macros = ["dep:orko-macros"]
 providers = ["dep:orko-providers"]
-# graph, mcp and runtime come back once those crates have code.
+# graph, mcp and runtime aren't ready yet.
 full = ["macros", "providers"]
 
 [dev-dependencies]
 futures.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
-# Examples live at the workspace root; the facade owns them.
 [[example]]
-name = "hello_openai"
-path = "../../examples/hello_openai.rs"
-required-features = ["providers"]
-
-[[example]]
-name = "hello_deepseek"
-path = "../../examples/hello_deepseek.rs"
+name = "hello_agent"
+path = "../../examples/hello_agent.rs"
 required-features = ["providers"]

@@ -117,9 +117,11 @@ cd orko
 cargo test --workspace
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# offline stub unless OPENAI_API_KEY / DEEPSEEK_API_KEY is set
-cargo run --example hello_openai
-cargo run --example hello_deepseek
+# offline stub
+cargo run --example hello_agent
+# any preset, as `provider:model` (reads that provider's key variable)
+cargo run --example hello_agent -- openai:gpt-4o-mini
+cargo run --example hello_agent -- ollama:llama3.2
 ```
 
 ## License
