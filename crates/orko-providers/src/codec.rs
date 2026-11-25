@@ -172,7 +172,11 @@ pub fn parse_event(data: &str) -> Result<Option<CompletionChunk>> {
             chunk.reasoning = s("reasoning_content").or_else(|| s("reasoning"));
             chunk.refusal = s("refusal");
             if let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) {
-                chunk.tool_calls = calls.iter().map(tool_call).collect();
+                chunk.tool_calls = calls
+                    .iter()
+                    .enumerate()
+                    .map(|(position, call)| tool_call(call, position as u32))
+                    .collect();
             }
         }
         chunk.finish_reason = match choice.get("finish_reason").and_then(Value::as_str) {
@@ -200,11 +204,14 @@ pub fn parse_event(data: &str) -> Result<Option<CompletionChunk>> {
     Ok((!empty).then_some(chunk))
 }
 
-fn tool_call(c: &Value) -> ToolCallDelta {
+fn tool_call(c: &Value, position: u32) -> ToolCallDelta {
     let f = c.get("function");
     let s = |v: Option<&Value>| v.and_then(Value::as_str).map(str::to_owned);
     ToolCallDelta {
-        index: c.get("index").and_then(Value::as_u64).unwrap_or(0) as u32,
+        index: c
+            .get("index")
+            .and_then(Value::as_u64)
+            .map_or(position, |index| index as u32),
         id: s(c.get("id")),
         name: s(f.and_then(|f| f.get("name"))),
         arguments: s(f.and_then(|f| f.get("arguments"))).unwrap_or_default(),
