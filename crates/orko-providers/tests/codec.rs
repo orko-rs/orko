@@ -192,6 +192,24 @@ fn multi_tool_call_deltas_reassemble_by_index() {
 }
 
 #[test]
+fn tool_calls_without_indexes_use_their_array_slots() {
+    let sse = concat!(
+        r#"data: {"choices":[{"delta":{"tool_calls":[{"id":"call_a","function":{"name":"add","arguments":"{\"a\":1}"}},{"id":"call_b","function":{"name":"mul","arguments":"{\"b\":2}"}}]}}]}"#,
+        "\n\n",
+    );
+    let chunks: Vec<_> = parse(sse).into_iter().map(Result::unwrap).collect();
+    let calls = &chunks[0].tool_calls;
+
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].index, 0);
+    assert_eq!(calls[0].id.as_deref(), Some("call_a"));
+    assert_eq!(calls[0].arguments, r#"{"a":1}"#);
+    assert_eq!(calls[1].index, 1);
+    assert_eq!(calls[1].id.as_deref(), Some("call_b"));
+    assert_eq!(calls[1].arguments, r#"{"b":2}"#);
+}
+
+#[test]
 fn reasoning_refusal_and_error_events() {
     let sse = concat!(
         r#"data: {"choices":[{"delta":{"reasoning_content":"think"}}]}"#,
